@@ -1,0 +1,6 @@
+node_modules/
+dist/
+public/python/
+*.tsbuildinfo
+test-results/
+.DS_Store

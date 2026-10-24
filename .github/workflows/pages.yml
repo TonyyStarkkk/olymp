@@ -1,0 +1,60 @@
+name: Publish Olymp to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the learning app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies and browser Python
+        run: npm ci
+      - name: Build for the repository's Pages path
+        env:
+          PAGES_BASE_PATH: /${{ github.event.repository.name }}/
+        run: npm run build -- --base="$PAGES_BASE_PATH"
+      - name: Verify the self-contained site
+        run: |
+          test -s dist/index.html
+          test -s dist/python/pyodide.mjs
+          test -s dist/python/pyodide.asm.wasm
+          test -s dist/python/python_stdlib.zip
+          touch dist/.nojekyll
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Publish the website
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check GitHub Pages configuration
+        uses: actions/configure-pages@v5
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

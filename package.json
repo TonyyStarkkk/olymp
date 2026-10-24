@@ -1,0 +1,32 @@
+{
+  "name": "olymp-python",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "postinstall": "node scripts/prepare-python.mjs",
+    "test:e2e": "python3 tests/e2e.py",
+    "format": "prettier --write src scripts README.md index.html package.json tsconfig.json",
+    "format:check": "prettier --check src scripts README.md index.html package.json tsconfig.json"
+  },
+  "dependencies": {
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@fontsource-variable/golos-text": "^5.3.0",
+    "@uiw/react-codemirror": "^4.25.12",
+    "lucide-react": "^1.61.0",
+    "pyodide": "^314.0.7",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "prettier": "^3.9.10",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}
