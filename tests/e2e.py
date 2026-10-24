@@ -13,6 +13,7 @@ import time
 import urllib.request
 
 from playwright.sync_api import sync_playwright, expect
+from content_checks import check_week_two
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "test-results"
@@ -38,6 +39,7 @@ def check_reference_solutions():
 
 
 def main():
+    check_week_two(lessons)
     check_reference_solutions()
     server = None
     server_log = None
@@ -142,23 +144,23 @@ def main():
                 expect(page.locator(".lesson-finish")).to_contain_text("Ещё один шаг к вершине!")
                 print(f"PASS: lesson {lesson['id']}, quiz and three exercises", flush=True)
             data = page.evaluate("JSON.parse(localStorage.getItem('olymp-learning-v1'))")
-            assert len(data["solved"]) == 15
-            assert len(data["quizzes"]) == 5
+            assert len(data["solved"]) == sum(len(lesson["exercises"]) for lesson in lessons)
+            assert len(data["quizzes"]) == len(lessons)
             assert data["solved"]["variables-1"]["helped"] is True
             assert sum(item["helped"] for item in data["solved"].values()) == 1
-            assert data["drafts"]["checkpoint-3"] == lessons[-1]["exercises"][-1]["solution"]
+            assert data["drafts"][lessons[-1]["exercises"][-1]["id"]] == lessons[-1]["exercises"][-1]["solution"]
             page.reload(wait_until="networkidle")
-            expect(page.locator(".cm-content")).to_contain_text("hundreds = n // 100")
+            expect(page.locator(".cm-content")).to_contain_text(lessons[-1]["exercises"][-1]["solution"].splitlines()[0])
             expect(page.locator(".exercise-switcher button").nth(2)).to_have_attribute("aria-pressed", "true")
             page.goto(f"{url}/#/progress")
             expect(page.locator(".progress-ring")).to_contain_text("100")
-            expect(page.get_by_role("heading", name="Первая неделя пройдена!")).to_be_visible()
+            expect(page.get_by_role("heading", name="Все доступные уроки пройдены!")).to_be_visible()
             with page.expect_download() as download_info:
                 page.get_by_role("button", name="Скачать прогресс").click()
             download = download_info.value
             download.save_as(str(ARTIFACTS / "export.json"))
             exported = json.loads((ARTIFACTS / "export.json").read_text())
-            assert len(exported["solved"]) == 15
+            assert len(exported["solved"]) == sum(len(lesson["exercises"]) for lesson in lessons)
             page.screenshot(path=str(ARTIFACTS / "progress-desktop.png"), full_page=True)
             print(f"PASS: {case_count} browser cases, mastery, help attribution, reload/resume and export", flush=True)
 
@@ -181,12 +183,58 @@ def main():
             page.get_by_role("button", name="Показать решение и объяснение").click()
             expect(page.locator(".solution-box")).to_contain_text("Преобразование в int")
             page.screenshot(path=str(ARTIFACTS / "lesson-desktop.png"), full_page=True)
-            for week in range(2, 9):
+            for week in range(3, 9):
                 page.goto(f"{url}/#/week/{week}")
                 expect(page.get_by_role("heading", name="Этот раздел пока в плане")).to_be_visible()
             page.goto(f"{url}/#/guide")
             expect(page.get_by_role("heading", name="Памятка Python")).to_be_visible()
             print("PASS: additional cases reject hardcoding, reset, solution reveal, all planned weeks and guide", flush=True)
+
+            # Week two is available, and mistakes in boundaries/indentation/font fail.
+            page.goto(f"{url}/#/week/2")
+            expect(page.locator(".lesson-card")).to_have_count(5)
+            page.screenshot(path=str(ARTIFACTS / "week-two-desktop.png"), full_page=True)
+            page.goto(f"{url}/#/lesson/logic")
+            run('n = int(input())\nif n > 10 and n < 20:\n    print("YES")\nelse:\n    print("NO")', "check")
+            expect(page.locator(".test-failure")).to_contain_text("Ответ пока не совпал")
+            page.goto(f"{url}/#/lesson/branches")
+            page.locator(".exercise-switcher button").nth(2).click()
+            task = next(item for item in lessons if item['id'] == 'branches')['exercises'][2]
+            run(task['starter'])
+            expect(page.locator(".error-feedback")).to_contain_text("четыре пробела")
+            page.goto(f"{url}/#/lesson/font")
+            expect(page.locator(".font-grid figure")).to_have_count(10)
+            page.locator(".font-reference").screenshot(path=str(ARTIFACTS / "font-reference.png"))
+            page.locator(".exercise-switcher button").nth(2).click()
+            font_task = lessons[-1]['exercises'][-1]
+            run(font_task['solution'].replace('print("#####")', 'print("....#")', 1), "check")
+            expect(page.locator(".test-failure")).to_contain_text("Ответ пока не совпал")
+            print("PASS: available week two, strict boundary checks, indentation guidance and font errors", flush=True)
+
+            # Existing version-1 saves retain all week-one progress and resume week two.
+            old_context = browser.new_context()
+            old = old_context.new_page()
+            old.goto(url + "/")
+            week_one = [lesson for lesson in lessons if lesson['week'] == 1]
+            old_save = {
+                'version': 1, 'lastExercise': 'checkpoint-3',
+                'drafts': {'checkpoint-3': '# мой сохранённый код'}, 'inputs': {'checkpoint-3': '582'},
+                'hints': {'variables-1': 2}, 'solutions': ['variables-1'],
+                'solved': {task['id']: {'helped': task['id'] == 'variables-1', 'at': '2026-10-24T00:00:00Z'} for lesson in week_one for task in lesson['exercises']},
+                'quizzes': {lesson['id']: True for lesson in week_one},
+            }
+            old.evaluate("data => localStorage.setItem('olymp-learning-v1', JSON.stringify(data))", old_save)
+            old.reload(wait_until="networkidle")
+            expect(old.get_by_role('link', name='Продолжить обучение')).to_have_attribute('href', '#/lesson/comparisons')
+            assert old.evaluate("JSON.parse(localStorage.getItem('olymp-learning-v1'))") == old_save
+            old.goto(f"{url}/#/progress")
+            expect(old.locator('.week-progress-card').nth(0)).to_contain_text('15 из 15 задач')
+            expect(old.locator('.week-progress-card').nth(0)).to_contain_text('Неделя пройдена')
+            expect(old.locator('.week-progress-card').nth(1)).to_contain_text('0 из 15 задач')
+            old.goto(f"{url}/#/lesson/checkpoint")
+            expect(old.locator('.cm-content')).to_contain_text('# мой сохранённый код')
+            old_context.close()
+            print("PASS: original week-one saves, drafts, help history and resume into week two", flush=True)
 
             # Phone navigation and layout must have no horizontal page overflow.
             mobile = context.new_page()
@@ -196,7 +244,7 @@ def main():
             expect(mobile.locator(".sidebar")).to_have_class("sidebar open")
             mobile.locator(".main-nav").get_by_role("link", name="Мой прогресс").click()
             expect(mobile.locator(".sidebar")).to_have_class("sidebar ")
-            for path, screenshot in [("/", "dashboard-mobile.png"), ("/lesson/input", "lesson-mobile.png"), ("/guide", "guide-mobile.png")]:
+            for path, screenshot in [("/", "dashboard-mobile.png"), ("/lesson/input", "lesson-mobile.png"), ("/guide", "guide-mobile.png"), ("/week/2", "week-two-mobile.png"), ("/lesson/font", "font-mobile.png")]:
                 mobile.goto(f"{url}/#{path}", wait_until="networkidle")
                 assert mobile.evaluate("document.documentElement.scrollWidth <= innerWidth"), path
                 mobile.screenshot(path=str(ARTIFACTS / screenshot), full_page=True, animations="disabled")

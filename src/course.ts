@@ -1,3 +1,5 @@
+import { secondWeekLessons } from "./week2.ts";
+
 export type TestCase = { input: string; expected: string };
 export type Exercise = {
   id: string;
@@ -13,6 +15,8 @@ export type Exercise = {
 };
 export type Lesson = {
   id: string;
+  week: number;
+  referencePatterns?: Record<string, string>;
   number: string;
   title: string;
   subtitle: string;
@@ -85,9 +89,10 @@ export const weeks = [
   },
 ];
 
-export const lessons: Lesson[] = [
+const firstWeekLessons: Lesson[] = [
   {
     id: "hello",
+    week: 1,
     number: "01",
     title: "Твоя первая программа",
     subtitle: "Научим компьютер говорить. Всего одной строкой.",
@@ -197,6 +202,7 @@ export const lessons: Lesson[] = [
   },
   {
     id: "variables",
+    week: 1,
     number: "02",
     title: "Переменные и числа",
     subtitle: "Дадим данным имена и превратим Python в калькулятор.",
@@ -302,6 +308,7 @@ export const lessons: Lesson[] = [
   },
   {
     id: "input",
+    week: 1,
     number: "03",
     title: "Программа слушает тебя",
     subtitle: "Один код — разные входные данные и разные ответы.",
@@ -423,6 +430,7 @@ export const lessons: Lesson[] = [
   },
   {
     id: "division",
+    week: 1,
     number: "04",
     title: "Делим и оставляем остаток",
     subtitle: "Секунды, конфеты и цифры — у них есть кое-что общее.",
@@ -546,6 +554,7 @@ export const lessons: Lesson[] = [
   },
   {
     id: "checkpoint",
+    week: 1,
     number: "05",
     title: "Моя первая самостоятельная",
     subtitle: "Собери всё, что уже умеешь. Здесь можно не спешить.",
@@ -665,4 +674,13 @@ export const lessons: Lesson[] = [
   },
 ];
 
+export const lessons: Lesson[] = [...firstWeekLessons, ...secondWeekLessons];
+export const getWeekLessons = (week: number) =>
+  lessons.filter((lesson) => lesson.week === week);
+export const availableWeekNumbers = [
+  ...new Set(lessons.map((lesson) => lesson.week)),
+];
+
 export const allExercises = lessons.flatMap((lesson) => lesson.exercises);
+
+export const totalCheckpoints = allExercises.length + lessons.length;

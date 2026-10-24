@@ -26,7 +26,14 @@ import {
   Trophy,
   X,
 } from "lucide-react";
-import { lessons, weeks } from "./course";
+import {
+  lessons,
+  weeks,
+  allExercises,
+  getWeekLessons,
+  availableWeekNumbers,
+  totalCheckpoints,
+} from "./course";
 import type { Exercise, Lesson } from "./course";
 import { lessonComplete, loadProgress, STORAGE_KEY } from "./storage";
 import type { Progress } from "./storage";
@@ -88,17 +95,22 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(""), 4500);
   };
   const solvedCount = Object.keys(progress.solved).length;
-  const lessonCount = lessons.filter((x) =>
-    lessonComplete(progress, x.id),
-  ).length;
-  const activeWeek = view.kind === "week" ? Number(view.id) : 1;
   const currentLesson = lessons.find((x) => x.id === view.id);
-  const resumeLesson =
+  const lastLesson =
     lessons.find((x) =>
       x.exercises.some((task) => task.id === progress.lastExercise),
     ) ?? lessons[0];
+  const resumeLesson = lessonComplete(progress, lastLesson.id)
+    ? (lessons.find((lesson) => !lessonComplete(progress, lesson.id)) ??
+      lastLesson)
+    : lastLesson;
+  const activeWeek =
+    view.kind === "week"
+      ? Number(view.id)
+      : (currentLesson?.week ?? resumeLesson.week);
   const percent = Math.round(
-    ((solvedCount + Object.keys(progress.quizzes).length) / 20) * 100,
+    ((solvedCount + Object.keys(progress.quizzes).length) / totalCheckpoints) *
+      100,
   );
 
   return (
@@ -160,8 +172,13 @@ export default function App() {
                   : ""
               }
             >
-              <span className={`week-number ${index === 0 ? "available" : ""}`}>
-                {index === 0 && lessonCount === 5 ? (
+              <span
+                className={`week-number ${getWeekLessons(index + 1).length ? "available" : ""}`}
+              >
+                {getWeekLessons(index + 1).length > 0 &&
+                getWeekLessons(index + 1).every((lesson) =>
+                  lessonComplete(progress, lesson.id),
+                ) ? (
                   <Check size={14} />
                 ) : (
                   String(index + 1).padStart(2, "0")
@@ -169,21 +186,29 @@ export default function App() {
               </span>
               <span>
                 {week.title}
-                {index === 0 && <small>5 занятий · можно начинать</small>}
+                {getWeekLessons(index + 1).length > 0 && (
+                  <small>
+                    {getWeekLessons(index + 1).length} занятий · доступны
+                  </small>
+                )}
               </span>
-              {index === 0 && <span className="tiny-dot" />}
+              {getWeekLessons(index + 1).length > 0 && (
+                <span className="tiny-dot" />
+              )}
             </a>
           ))}
         </nav>
         <div className="sidebar-bottom">
           <div className="side-progress-heading">
-            <span>Первая неделя</span>
+            <span>Доступные уроки</span>
             <strong>{percent}%</strong>
           </div>
           <div className="progress-track">
             <span style={{ width: `${percent}%` }} />
           </div>
-          <p>{solvedCount} из 15 задач решено</p>
+          <p>
+            {solvedCount} из {allExercises.length} задач решено
+          </p>
           <div className="student-tag">
             <span className="student-avatar">Я</span>
             <div>
@@ -217,7 +242,8 @@ export default function App() {
           </div>
           <div className="topbar-right">
             <span className="course-chip">
-              <span />8 недель до старта
+              <span />
+              Курс на 8 недель
             </span>
             <a href="#/guide" className="help-link">
               <CircleHelp size={19} />
@@ -232,11 +258,7 @@ export default function App() {
         )}
         <main>
           {view.kind === "home" && (
-            <Home
-              progress={progress}
-              resumeLesson={resumeLesson}
-              lessonCount={lessonCount}
-            />
+            <Home progress={progress} resumeLesson={resumeLesson} />
           )}
           {view.kind === "week" && (
             <WeekOverview week={Number(view.id)} progress={progress} />
@@ -280,11 +302,9 @@ export default function App() {
 function Home({
   progress,
   resumeLesson,
-  lessonCount,
 }: {
   progress: Progress;
   resumeLesson: Lesson;
-  lessonCount: number;
 }) {
   const started =
     Object.keys(progress.drafts).length > 0 ||
@@ -376,8 +396,8 @@ function Home({
             <BookOpen size={21} />
           </span>
           <div>
-            <strong>5 занятий</strong>
-            <span>в первой неделе</span>
+            <strong>{lessons.length} занятий</strong>
+            <span>доступно недель: {availableWeekNumbers.length}</span>
           </div>
         </div>
         <div className="stat-card">
@@ -385,7 +405,7 @@ function Home({
             <Terminal size={21} />
           </span>
           <div>
-            <strong>15 задач</strong>
+            <strong>{allExercises.length} задач</strong>
             <span>от простого к интересному</span>
           </div>
         </div>
@@ -401,15 +421,31 @@ function Home({
       </div>
       <div className="dashboard-columns">
         <section>
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">НЕДЕЛЯ 01</span>
-              <h2>Первые шаги в Python</h2>
-            </div>
-            <span className="muted small">{lessonCount} / 5 пройдено</span>
-          </div>
-          <LessonList progress={progress} />
-          <a href="#/week/2" className="next-week-link">
+          {availableWeekNumbers.map((week) => (
+            <section className="dashboard-week" key={week}>
+              <div className="section-heading">
+                <div>
+                  <span className="eyebrow">
+                    НЕДЕЛЯ {String(week).padStart(2, "0")}
+                  </span>
+                  <h2>{weeks[week - 1].title}</h2>
+                </div>
+                <span className="muted small">
+                  {
+                    getWeekLessons(week).filter((lesson) =>
+                      lessonComplete(progress, lesson.id),
+                    ).length
+                  }{" "}
+                  / {getWeekLessons(week).length} пройдено
+                </span>
+              </div>
+              <LessonList progress={progress} week={week} />
+            </section>
+          ))}
+          <a
+            href={`#/week/${availableWeekNumbers.length + 1}`}
+            className="next-week-link"
+          >
             А что дальше? Посмотреть маршрут
             <ArrowRight size={16} />
           </a>
@@ -470,10 +506,10 @@ function Home({
   );
 }
 
-function LessonList({ progress }: { progress: Progress }) {
+function LessonList({ progress, week }: { progress: Progress; week: number }) {
   return (
     <div className="lesson-list">
-      {lessons.map((lesson, index) => {
+      {getWeekLessons(week).map((lesson, index) => {
         const complete = lessonComplete(progress, lesson.id);
         const count = lesson.exercises.filter(
           (task) => progress.solved[task.id],
@@ -490,7 +526,7 @@ function LessonList({ progress }: { progress: Progress }) {
             <div className="lesson-card-text">
               <div className="lesson-title-row">
                 <h3>{lesson.title}</h3>
-                {index === 0 && !complete && (
+                {lesson.id === "hello" && !complete && (
                   <span className="mini-tag">Начни здесь</span>
                 )}
                 {index === 4 && (
@@ -549,15 +585,16 @@ function WeekOverview({
           <p>{data.result}</p>
         </div>
       </div>
-      {week === 1 ? (
-        <LessonList progress={progress} />
+      {getWeekLessons(week).length > 0 ? (
+        <LessonList progress={progress} week={week} />
       ) : (
         <div className="planned-card">
           <BookOpen size={32} />
           <h2>Этот раздел пока в плане</h2>
           <p>
             Уроки и задания этой недели ещё не добавлены. Сейчас можно полностью
-            пройти первую неделю: пять занятий, 15 задач и проверка знаний.
+            пройти {availableWeekNumbers.length} недели: {lessons.length}{" "}
+            занятий, {allExercises.length} задач и вопросы для самопроверки.
           </p>
           <a className="button primary" href="#/week/1">
             Перейти к первой неделе
@@ -628,13 +665,15 @@ function LessonView({
   };
   return (
     <div className="page lesson-page">
-      <a className="back-link" href="#/week/1">
+      <a className="back-link" href={`#/week/${lesson.week}`}>
         <ArrowLeft size={15} />
-        Первая неделя
+        Неделя {lesson.week}
       </a>
       <div className="lesson-page-heading">
         <div>
-          <div className="eyebrow">ЗАНЯТИЕ {lesson.number} / 05</div>
+          <div className="eyebrow">
+            НЕДЕЛЯ {lesson.week} · ЗАНЯТИЕ {lesson.number}
+          </div>
           <h1>{lesson.title}</h1>
           <p>{lesson.subtitle}</p>
         </div>
@@ -707,6 +746,30 @@ function LessonView({
                     )}
                   </article>
                 ))}
+                {lesson.referencePatterns && (
+                  <section
+                    className="font-reference"
+                    aria-label="Шаблоны десяти цифр"
+                  >
+                    <h2>Шаблоны цифр 0–9</h2>
+                    <p>
+                      Это рисунки из условия: используй их при решении. В каждом
+                      — 9 строк по 5 символов.
+                    </p>
+                    <div className="font-grid">
+                      {Object.entries(lesson.referencePatterns).map(
+                        ([digit, pattern]) => (
+                          <figure key={digit}>
+                            <figcaption>Цифра {digit}</figcaption>
+                            <pre aria-label={`Рисунок цифры ${digit}`}>
+                              {pattern}
+                            </pre>
+                          </figure>
+                        ),
+                      )}
+                    </div>
+                  </section>
+                )}
                 <div className="remember-box">
                   <Lightbulb size={20} />
                   <div>
@@ -1335,9 +1398,7 @@ function ProgressView({
       <h1>
         Ты уже на пути<span className="green-dot">.</span>
       </h1>
-      <p className="lead">
-        Здесь виден твой прогресс по доступной первой неделе.
-      </p>
+      <p className="lead">Здесь виден твой прогресс по доступным неделям.</p>
       <div className="progress-hero">
         <div
           className="progress-ring"
@@ -1353,14 +1414,14 @@ function ProgressView({
         <div>
           <h2>
             {percent === 100
-              ? "Первая неделя пройдена!"
+              ? "Все доступные уроки пройдены!"
               : solved.length
                 ? "Хорошее начало. Продолжай."
                 : "Первая вершина впереди"}
           </h2>
           <p>
-            {solved.length} из 15 задач · {Object.keys(progress.quizzes).length}{" "}
-            из 5 вопросов
+            {solved.length} из {allExercises.length} задач ·{" "}
+            {Object.keys(progress.quizzes).length} из {lessons.length} вопросов
           </p>
           <p className="small muted">
             Прогресс растёт за проверенные решения и верные ответы, а не за
@@ -1393,12 +1454,42 @@ function ProgressView({
           </span>
           <div>
             <strong>
-              {lessons.filter((x) => lessonComplete(progress, x.id)).length} из
-              5
+              {lessons.filter((x) => lessonComplete(progress, x.id)).length} из{" "}
+              {lessons.length}
             </strong>
             <span>занятий пройдено</span>
           </div>
         </div>
+      </div>
+      <div className="week-progress-grid">
+        {availableWeekNumbers.map((week) => {
+          const weekLessons = getWeekLessons(week);
+          const tasks = weekLessons.flatMap((lesson) => lesson.exercises);
+          const completed = weekLessons.filter((lesson) =>
+            lessonComplete(progress, lesson.id),
+          ).length;
+          return (
+            <a
+              className="week-progress-card"
+              key={week}
+              href={`#/week/${week}`}
+            >
+              <strong>
+                Неделя {week}: {weeks[week - 1].title}
+              </strong>
+              <span>
+                {completed} из {weekLessons.length} занятий пройдено
+              </span>
+              <span>
+                {tasks.filter((task) => progress.solved[task.id]).length} из{" "}
+                {tasks.length} задач решено
+              </span>
+              {completed === weekLessons.length && (
+                <span>Неделя пройдена ✓</span>
+              )}
+            </a>
+          );
+        })}
       </div>
       <h2 className="list-heading">Твои задания</h2>
       <div className="results-list">
@@ -1475,13 +1566,28 @@ function Guide() {
       "t = 135\nminutes = t // 60\nseconds = t % 60",
       "Полные группы и остаток: один приём для секунд, коробок и объёма памяти.",
     ],
+    [
+      "Сравнить",
+      "a == b  # равны\na != b  # не равны\na > b   # больше\na < b   # меньше\na >= b  # больше или равно\na <= b  # меньше или равно",
+      "Результат — True или False. Один знак = присваивает значение, два == сравнивают.",
+    ],
+    [
+      "Выбрать действие",
+      'n = int(input())\nif n > 0:\n    print("Плюс")\nelif n < 0:\n    print("Минус")\nelse:\n    print("Ноль")',
+      "Выполняется первая подходящая ветвь. После условия — двоеточие, внутри ветви — четыре пробела.",
+    ],
+    [
+      "Соединить условия",
+      "10 <= n and n <= 20\nday == 6 or day == 7\nnot blocked",
+      "and — оба условия верны; or — хотя бы одно; not — меняет True и False местами. В примерах blocked — логическое значение.",
+    ],
   ];
   return (
     <div className="page narrow-page">
       <div className="eyebrow">МОЖНО ПОДСМАТРИВАТЬ</div>
       <h1>Памятка Python</h1>
       <p className="lead">
-        Самое нужное из первой недели. Запоминать всё сразу не обязательно.
+        Самое нужное из изученных тем. Запоминать всё сразу не обязательно.
       </p>
       <div className="guide-grid">
         {cards.map(([title, code, explanation]) => (
@@ -1499,6 +1605,11 @@ function Guide() {
         <dl>
           <dt>SyntaxError</dt>
           <dd>Проверь скобки, кавычки и написание команды.</dd>
+          <dt>IndentationError / TabError</dt>
+          <dd>
+            Внутри ветви нужны четыре пробела. if, elif и else одной цепочки
+            стоят на одном уровне. Не смешивай пробелы и табуляцию.
+          </dd>
           <dt>NameError</dt>
           <dd>
             Проверь имя переменной и убедись, что она уже получила значение.

@@ -155,7 +155,7 @@ export function explainError(error: string) {
   // student's string literal or an earlier chained exception are not the cause.
   const kind = [...error.matchAll(/^(\w+Error):/gm)].at(-1)?.[1];
   if (kind === "IndentationError" || kind === "TabError")
-    return "Проверь отступы в начале строк. В этих заданиях команды начинаются с самого левого края.";
+    return "Проверь отступы в начале строк. Внутри if, elif и else нужны четыре пробела. Сами if, elif и else одной цепочки стоят на одном уровне. Не смешивай пробелы и табуляцию.";
   if (kind === "SyntaxError")
     return "Python не смог прочитать команду. Проверь парные скобки, кавычки и написание команды в указанной строке.";
   if (kind === "NameError")
