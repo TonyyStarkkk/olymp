@@ -13,7 +13,7 @@ import time
 import urllib.request
 
 from playwright.sync_api import sync_playwright, expect
-from content_checks import check_week_two
+from content_checks import check_week_two, check_week_three
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "test-results"
@@ -40,6 +40,7 @@ def check_reference_solutions():
 
 def main():
     check_week_two(lessons)
+    check_week_three(lessons)
     check_reference_solutions()
     server = None
     server_log = None
@@ -183,7 +184,7 @@ def main():
             page.get_by_role("button", name="Показать решение и объяснение").click()
             expect(page.locator(".solution-box")).to_contain_text("Преобразование в int")
             page.screenshot(path=str(ARTIFACTS / "lesson-desktop.png"), full_page=True)
-            for week in range(3, 9):
+            for week in range(max(lesson["week"] for lesson in lessons) + 1, 9):
                 page.goto(f"{url}/#/week/{week}")
                 expect(page.get_by_role("heading", name="Этот раздел пока в плане")).to_be_visible()
             page.goto(f"{url}/#/guide")
@@ -206,7 +207,7 @@ def main():
             expect(page.locator(".font-grid figure")).to_have_count(10)
             page.locator(".font-reference").screenshot(path=str(ARTIFACTS / "font-reference.png"))
             page.locator(".exercise-switcher button").nth(2).click()
-            font_task = lessons[-1]['exercises'][-1]
+            font_task = next(lesson for lesson in lessons if lesson['id'] == 'font')['exercises'][-1]
             run(font_task['solution'].replace('print("#####")', 'print("....#")', 1), "check")
             expect(page.locator(".test-failure")).to_contain_text("Ответ пока не совпал")
             print("PASS: available week two, strict boundary checks, indentation guidance and font errors", flush=True)
@@ -233,8 +234,45 @@ def main():
             expect(old.locator('.week-progress-card').nth(1)).to_contain_text('0 из 15 задач')
             old.goto(f"{url}/#/lesson/checkpoint")
             expect(old.locator('.cm-content')).to_contain_text('# мой сохранённый код')
+            # A saved learner who completed both released weeks resumes the new one.
+            previous = [lesson for lesson in lessons if lesson['week'] <= 2]
+            old_save['solved'] = {task['id']: {'helped': False, 'at': '2026-10-24T00:00:00Z'} for lesson in previous for task in lesson['exercises']}
+            old_save['quizzes'] = {lesson['id']: True for lesson in previous}
+            old_save['lastExercise'] = 'font-3'
+            old_save['drafts']['font-3'] = '# мой рисунок'
+            old.goto(url + "/")
+            old.evaluate("data => localStorage.setItem('olymp-learning-v1', JSON.stringify(data))", old_save)
+            old.reload(wait_until="networkidle")
+            expect(old.get_by_role('link', name='Продолжить обучение')).to_have_attribute('href', '#/lesson/repeat')
+            assert old.evaluate("JSON.parse(localStorage.getItem('olymp-learning-v1'))") == old_save
+            old.goto(f"{url}/#/progress")
+            expect(old.locator('.week-progress-card').nth(1)).to_contain_text('15 из 15 задач')
+            expect(old.locator('.week-progress-card').nth(2)).to_contain_text('0 из 15 задач')
             old_context.close()
             print("PASS: original week-one saves, drafts, help history and resume into week two", flush=True)
+
+            page.goto(f"{url}/#/week/3")
+            expect(page.locator('.lesson-card')).to_have_count(5)
+            page.screenshot(path=str(ARTIFACTS / 'week-three-desktop.png'), full_page=True)
+            page.goto(f"{url}/#/lesson/repeat")
+            page.locator('.input-panel textarea').fill('0')
+            repeat_task = next(lesson for lesson in lessons if lesson['id'] == 'repeat')['exercises'][0]
+            run(repeat_task['solution'])
+            expect(page.locator('.error-feedback')).to_have_count(0)
+            run('for i in range(1, 4, 0):\n    print(i)')
+            expect(page.locator('.error-feedback')).to_contain_text('Шаг range не может быть нулём')
+            page.goto(f"{url}/#/lesson/bytes")
+            page.locator('.exercise-switcher button').nth(1).click()
+            bytes_lesson = next(lesson for lesson in lessons if lesson['id'] == 'bytes')
+            run(bytes_lesson['exercises'][1]['starter'], 'check')
+            expect(page.locator('.test-failure')).to_contain_text('Ответ пока не совпал')
+            page.locator('.exercise-switcher button').nth(2).click()
+            run(bytes_lesson['exercises'][2]['solution'].replace('1000', '1024'), 'check')
+            expect(page.locator('.test-failure')).to_contain_text('Ответ пока не совпал')
+            run(bytes_lesson['exercises'][2]['solution'], 'check')
+            expect(page.locator('.test-success')).to_contain_text('Все проверки пройдены')
+            page.screenshot(path=str(ARTIFACTS / 'bytes-desktop.png'), full_page=True)
+            print('PASS: week-three navigation, week-two saves/resume, empty loop output, range error, task-B mistakes/recovery', flush=True)
 
             # Phone navigation and layout must have no horizontal page overflow.
             mobile = context.new_page()
@@ -244,7 +282,7 @@ def main():
             expect(mobile.locator(".sidebar")).to_have_class("sidebar open")
             mobile.locator(".main-nav").get_by_role("link", name="Мой прогресс").click()
             expect(mobile.locator(".sidebar")).to_have_class("sidebar ")
-            for path, screenshot in [("/", "dashboard-mobile.png"), ("/lesson/input", "lesson-mobile.png"), ("/guide", "guide-mobile.png"), ("/week/2", "week-two-mobile.png"), ("/lesson/font", "font-mobile.png")]:
+            for path, screenshot in [("/", "dashboard-mobile.png"), ("/lesson/input", "lesson-mobile.png"), ("/guide", "guide-mobile.png"), ("/week/2", "week-two-mobile.png"), ("/lesson/font", "font-mobile.png"), ("/week/3", "week-three-mobile.png"), ("/lesson/bytes", "bytes-mobile.png")]:
                 mobile.goto(f"{url}/#{path}", wait_until="networkidle")
                 assert mobile.evaluate("document.documentElement.scrollWidth <= innerWidth"), path
                 mobile.screenshot(path=str(ARTIFACTS / screenshot), full_page=True, animations="disabled")

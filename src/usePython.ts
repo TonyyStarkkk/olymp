@@ -155,11 +155,16 @@ export function explainError(error: string) {
   // student's string literal or an earlier chained exception are not the cause.
   const kind = [...error.matchAll(/^(\w+Error):/gm)].at(-1)?.[1];
   if (kind === "IndentationError" || kind === "TabError")
-    return "Проверь отступы в начале строк. Внутри if, elif и else нужны четыре пробела. Сами if, elif и else одной цепочки стоят на одном уровне. Не смешивай пробелы и табуляцию.";
+    return "Проверь отступы в начале строк. Внутри if, elif, else, for и while нужен отступ на четыре пробела относительно начала блока. Вложенный блок добавляет ещё четыре. Сами if, elif и else одной цепочки стоят на одном уровне. Не смешивай пробелы и табуляцию.";
   if (kind === "SyntaxError")
     return "Python не смог прочитать команду. Проверь парные скобки, кавычки и написание команды в указанной строке.";
   if (kind === "NameError")
     return "Использовано неизвестное имя. Проверь название переменной: она должна получить значение до использования.";
+  if (
+    kind === "ValueError" &&
+    /ValueError: range\(\) arg 3 must not be zero/.test(error)
+  )
+    return "Шаг range не может быть нулём. Для движения вперёд используй положительный шаг, для обратного отсчёта — отрицательный.";
   if (kind === "ValueError")
     return "Не удалось превратить текст в число. В поле ввода нужны цифры, например 15, без кавычек и пояснений.";
   if (kind === "EOFError")
