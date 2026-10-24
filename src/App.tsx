@@ -345,12 +345,12 @@ function Home({
           <span className="spark spark-two">✦</span>
           <div className="summit">
             <svg viewBox="0 0 300 240">
-              <path d="M8 221 112 60 176 150 214 94 299 221Z" fill="#cfdfc4" />
-              <path d="m112 60 64 90-39-12-22 17-25-22-32 11Z" fill="#f7faef" />
-              <path d="m214 94 85 127h-68l-55-71Z" fill="#a2bc97" />
-              <path d="m214 94 29 43-18-5-15 13-14-9Z" fill="#f7faef" />
-              <path d="M112 59V22" stroke="#234237" strokeWidth="3" />
-              <path d="M113 22h37l-9 12 9 12h-37Z" fill="#dc805d" />
+              <path d="M8 221 112 60 176 150 214 94 299 221Z" fill="#d8d8d8" />
+              <path d="m112 60 64 90-39-12-22 17-25-22-32 11Z" fill="#fafafa" />
+              <path d="m214 94 85 127h-68l-55-71Z" fill="#b0b0b0" />
+              <path d="m214 94 29 43-18-5-15 13-14-9Z" fill="#fafafa" />
+              <path d="M112 59V22" stroke="#333333" strokeWidth="3" />
+              <path d="M113 22h37l-9 12 9 12h-37Z" fill="#444444" />
             </svg>
           </div>
           <div className="floating-code">
@@ -1342,7 +1342,7 @@ function ProgressView({
         <div
           className="progress-ring"
           style={{
-            background: `conic-gradient(#397158 ${percent}%, #e6eadf 0)`,
+            background: `conic-gradient(#222222 ${percent}%, #e5e5e5 0)`,
           }}
         >
           <span>

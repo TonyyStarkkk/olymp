@@ -1,6 +1,5 @@
 import CodeMirror from "@uiw/react-codemirror";
 import { python } from "@codemirror/lang-python";
-import { oneDark } from "@codemirror/theme-one-dark";
 
 const extensions = [python()];
 export default function CodeEditor({
@@ -16,7 +15,7 @@ export default function CodeEditor({
     <CodeMirror
       value={code}
       height="260px"
-      theme={oneDark}
+      theme="light"
       extensions={extensions}
       onChange={onChange}
       editable={editable}
