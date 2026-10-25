@@ -179,3 +179,98 @@ def check_week_four(lessons):
                                       **{str(i):names[i] for i in range(20,100,10)},
                                       '100':'hundred', '1000':'thousand'}
     print('PASS: week-four answers, vocabulary, all 127 years, six PDF samples and common pronunciation mistakes', flush=True)
+
+
+def check_week_five(lessons):
+    import ast
+    import contextlib
+    import io
+    from itertools import product
+    # Independent geometry: rows are staggered by half a key. No authored
+    # diagonal strings or count formulas are used to enumerate allowed words.
+    board = {(row, 2 * column + row): letter
+             for row, text in enumerate(['qwertyuiop', 'asdfghjkl', 'zxcvbnm'])
+             for column, letter in enumerate(text)}
+    directions = [(0, 2), (1, 1), (1, -1)]
+    def geometric_words(k, chosen=directions):
+        words = set()
+        for row, column in board:
+            for dr, dc in chosen:
+                positions = [(row + i * dr, column + i * dc) for i in range(k)]
+                if all(position in board for position in positions):
+                    words.add(''.join(board[position] for position in positions))
+        return words
+    allowed = {k: geometric_words(k) for k in range(1, 11)}
+    assert [len(allowed[k]) for k in range(1,11)] == [26,55,34,17,14,11,8,5,3,1]
+    assert allowed[7] == {'asdfghj','dfghjkl','ertyuio','qwertyu','rtyuiop','sdfghjk','wertyui','zxcvbnm'}
+    for word in ['qwerty','tgb','ok','az','rdx','dfgh','ijn']:
+        assert word in allowed[len(word)]
+    for word in ['wasd','ytrewq','bgt','jmk','rtx','edfv']:
+        assert word not in allowed[len(word)]
+    tasks = {task['id']: task for lesson in lessons for task in lesson['exercises']}
+    def expected(task_id, raw):
+        lines = raw.splitlines()
+        if task_id == 'enumeration-1':
+            n = int(raw)
+            return '\n'.join(str(i) for i in range(1,n+1) if n % i == 0)
+        if task_id == 'enumeration-2':
+            n,m,s = map(int, lines)
+            return str(sum(1 <= s-a <= m for a in range(1,n+1)))
+        if task_id == 'enumeration-3':
+            n = int(raw)
+            return '\n'.join(str(x) for x in range(10,100) if 1<=x//10<=n and 1<=x%10<=n and x//10!=x%10)
+        if task_id == 'windows-1':
+            text,k = lines[0],int(lines[1])
+            return '\n'.join(text[start:end] for start in range(len(text)) for end in range(start+1,len(text)+1) if end-start==k)
+        if task_id == 'windows-2':
+            n,k = map(int, lines)
+            return str(max(0,n-k+1))
+        if task_id == 'windows-3':
+            text, pattern = lines
+            return str(sum(text.startswith(pattern, i) for i in range(len(text))))
+        if task_id == 'unique-1': return str(len(set(raw)))
+        if task_id == 'unique-2': return str(len(set(lines[1:])))
+        if task_id == 'unique-3':
+            text,k = lines[0],int(lines[1])
+            return str(len({text[start:end] for start in range(len(text)) for end in range(start+1,len(text)+1) if end-start==k}))
+        if task_id == 'keyboard-1': return str(len(geometric_words(int(raw), [(0,2)])))
+        if task_id == 'keyboard-2': return str(len(geometric_words(int(raw), [(1,1),(1,-1)])))
+        if task_id == 'keyboard-3': return 'YES' if raw in allowed[len(raw)] else 'NO'
+        if task_id.startswith('passwords-'): return str(len(allowed[int(raw)]))
+        raise AssertionError(task_id)
+    for lesson in lessons:
+        if lesson['week'] != 5: continue
+        for task in lesson['exercises']:
+            for case in [task['sample'], *task['tests']]:
+                assert case['expected'] == expected(task['id'], case['input']), (task['id'], case)
+    nodes = ast.parse(tasks['keyboard-3']['starter']).body
+    lines = next(ast.literal_eval(node.value) for node in nodes if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='lines' for t in node.targets))
+    for k in range(1,11):
+        authored = {line[i:i+k] for line in lines for i in range(len(line)-k+1)}
+        assert authored == allowed[k], (k, authored ^ allowed[k])
+    final = tasks['passwords-3']
+    assert {int(case['input']) for case in final['tests']} == set(range(1,11))
+    assert {'input':'3','expected':'34'} in final['tests']
+    assert {'input':'7','expected':'8'} in final['tests']
+    def run(code, raw):
+        data = iter(raw.splitlines())
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            exec(code, {'input': lambda: next(data)})
+        return output.getvalue().rstrip('\n')
+    for k in range(1,11):
+        assert run(final['solution'], str(k)) == str(len(allowed[k]))
+    mutants = [tasks['passwords-2']['starter'],
+               final['solution'].replace('len(line) - k + 1','len(line) - k'),
+               final['solution'].replace('"ik", "ol"','"ik"'),
+               final['solution'].replace('len(line) >= k','len(line) > k')]
+    for mutant in mutants:
+        assert any(run(mutant, case['input']) != case['expected'] for case in final['tests'])
+    # Repeated-character strings exercise overlap and deduplication separately.
+    for length in range(1,6):
+        for letters in product('ab', repeat=length):
+            text = ''.join(letters)
+            for k in range(1,length+2):
+                raw = f'{text}\n{k}'
+                assert run(tasks['unique-3']['solution'],raw) == expected('unique-3',raw)
+    print('PASS: week-five answers, complete keyboard geometry, PDF examples, all ten lengths and overlapping/unique windows', flush=True)

@@ -3371,3 +3371,51 @@ button {
 .word-reference thead {
   background: #f3f3f3;
 }
+
+.keyboard-paths {
+  margin: 24px 0 32px;
+  padding: 20px;
+  border: 1px solid #d5d5d5;
+  border-radius: 12px;
+  background: #fff;
+  color: #111;
+}
+
+.keyboard-paths h2 {
+  margin-top: 0;
+}
+
+.keyboard-paths label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.keyboard-paths select {
+  min-width: 110px;
+  padding: 8px 12px;
+  color: #111;
+  background: #fff;
+  border: 1px solid #999;
+  border-radius: 6px;
+  font: inherit;
+}
+
+.keyboard-paths svg {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  height: auto;
+  margin: 20px auto 4px;
+}
+
+.keyboard-explanation p {
+  line-height: 1.7;
+}
+
+.keyboard-sequence {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-weight: 600;
+}

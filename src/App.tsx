@@ -1,3 +1,4 @@
+import KeyboardPaths from "./KeyboardPaths";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
@@ -592,9 +593,9 @@ function WeekOverview({
           <BookOpen size={32} />
           <h2>Этот раздел пока в плане</h2>
           <p>
-            Уроки и задания этой недели ещё не добавлены. Сейчас можно полностью
-            пройти {availableWeekNumbers.length} недели: {lessons.length}{" "}
-            занятий, {allExercises.length} задач и вопросы для самопроверки.
+            Уроки и задания этой недели ещё не добавлены. Сейчас доступны недели{" "}
+            {availableWeekNumbers.join(", ")}: {lessons.length} занятий,{" "}
+            {allExercises.length} задач и вопросы для самопроверки.
           </p>
           <a className="button primary" href="#/week/1">
             Перейти к первой неделе
@@ -731,6 +732,7 @@ function LessonView({
                     </div>
                   ))}
                 </div>
+                {lesson.showKeyboard && <KeyboardPaths />}
                 {lesson.sections.map((section, i) => (
                   <article className="theory-section" key={section.title}>
                     <span className="section-number">0{i + 1}</span>
@@ -1649,6 +1651,21 @@ function Guide() {
       "Найти значение по ключу",
       'words = {20: "twenty", 30: "thirty"}\nn = 20\nif n in words:\n    print(words[n])',
       "Словарь хранит пары ключ: значение. in проверяет наличие ключа. Число 20 и строка «20» — разные ключи.",
+    ],
+    [
+      "Перебрать пары",
+      "for a in range(1, 3):\n    for b in range(1, 4):\n        print(a, b)",
+      "Для каждого a внутренний цикл заново перебирает все b. Здесь 2 × 3 = 6 упорядоченных пар.",
+    ],
+    [
+      "Выделить все окна",
+      'text = "abcde"\nk = 3\nfor start in range(len(text) - k + 1):\n    print(text[start:start + k])',
+      "При k ≤ n полных окон n − k + 1, иначе 0. Срезы могут перекрываться; неполные окна у края исключены границей цикла.",
+    ],
+    [
+      "Не считать повторы",
+      'seen = []\nfor letter in "abaca":\n    if letter not in seen:\n        seen.append(letter)\nprint(len(seen))  # 3',
+      "in у списка проверяет значение, у словаря — ключ, у строки — непрерывный фрагмент. Для небольшого числа вариантов список seen помогает убрать повторы.",
     ],
   ];
   return (
