@@ -1,5 +1,6 @@
 import { secondWeekLessons } from "./week2.ts";
 import { thirdWeekLessons } from "./week3.ts";
+import { fourthWeekLessons } from "./week4.ts";
 
 export type TestCase = { input: string; expected: string };
 export type Exercise = {
@@ -18,6 +19,11 @@ export type Lesson = {
   id: string;
   week: number;
   referencePatterns?: Record<string, string>;
+  referenceTable?: {
+    title: string;
+    headers: [string, string];
+    rows: [string, string][];
+  };
   number: string;
   title: string;
   subtitle: string;
@@ -679,6 +685,7 @@ export const lessons: Lesson[] = [
   ...firstWeekLessons,
   ...secondWeekLessons,
   ...thirdWeekLessons,
+  ...fourthWeekLessons,
 ];
 export const getWeekLessons = (week: number) =>
   lessons.filter((lesson) => lesson.week === week);

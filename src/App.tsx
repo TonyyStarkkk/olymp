@@ -770,6 +770,34 @@ function LessonView({
                     </div>
                   </section>
                 )}
+                {lesson.referenceTable && (
+                  <details className="word-reference">
+                    <summary>{lesson.referenceTable.title}</summary>
+                    <table>
+                      <caption>
+                        Названия из условия задачи E. Их можно брать отсюда:
+                        учить английские слова наизусть не требуется.
+                      </caption>
+                      <thead>
+                        <tr>
+                          {lesson.referenceTable.headers.map((header) => (
+                            <th scope="col" key={header}>
+                              {header}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lesson.referenceTable.rows.map(([number, word]) => (
+                          <tr key={number}>
+                            <th scope="row">{number}</th>
+                            <td>{word}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </details>
+                )}
                 <div className="remember-box">
                   <Lightbulb size={20} />
                   <div>
@@ -1602,6 +1630,26 @@ function Guide() {
       "decimal_mb = 1000 ** 2\nbinary_mib = 1024 ** 2\nn = 2500\nprint(n // 1024)\nprint(n % 1024)",
       "В задаче B входные KB…PB основаны на 1000. Двоичные KiB…PiB — на 1024. После выделения каждой крупной части продолжай с остатком.",
     ],
+    [
+      "Работать со строкой",
+      'text = "Python"\nprint(len(text))  # 6\nprint(text[0])    # P\nprint(text[-1])   # n\nprint(text[:2])   # Py',
+      "Индексы начинаются с нуля. У среза правая граница не входит. Пустая строка не имеет первого и последнего символов.",
+    ],
+    [
+      "Соединить текст",
+      'print("twenty" + "-" + "one")\nprint("Год: " + str(2026))',
+      "Добавляй пробелы и дефисы явно. str превращает число в строку; строку и число напрямую складывать нельзя.",
+    ],
+    [
+      "Сохранить список",
+      "values = []\nvalues.append(5)\nvalues.append(8)\nprint(values[-1])  # 8",
+      "append меняет список. Не присваивай результат append обратно списку. Последний неотрицательный индекс — len(values) − 1.",
+    ],
+    [
+      "Найти значение по ключу",
+      'words = {20: "twenty", 30: "thirty"}\nn = 20\nif n in words:\n    print(words[n])',
+      "Словарь хранит пары ключ: значение. in проверяет наличие ключа. Число 20 и строка «20» — разные ключи.",
+    ],
   ];
   return (
     <div className="page narrow-page">
@@ -1635,6 +1683,16 @@ function Guide() {
           <dt>NameError</dt>
           <dd>
             Проверь имя переменной и убедись, что она уже получила значение.
+          </dd>
+          <dt>IndexError</dt>
+          <dd>
+            Такой позиции нет. Индексы начинаются с 0; последний — длина минус
+            1. У пустой строки или списка нет элементов.
+          </dd>
+          <dt>KeyError</dt>
+          <dd>
+            Такого ключа нет в словаре. Проверь написание и тип: 20 и "20"
+            различаются. Если неизвестный ключ допустим, проверь key in table.
           </dd>
           <dt>ValueError</dt>
           <dd>

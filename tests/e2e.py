@@ -13,7 +13,7 @@ import time
 import urllib.request
 
 from playwright.sync_api import sync_playwright, expect
-from content_checks import check_week_two, check_week_three
+from content_checks import check_week_two, check_week_three, check_week_four
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "test-results"
@@ -41,6 +41,7 @@ def check_reference_solutions():
 def main():
     check_week_two(lessons)
     check_week_three(lessons)
+    check_week_four(lessons)
     check_reference_solutions()
     server = None
     server_log = None
@@ -248,6 +249,21 @@ def main():
             old.goto(f"{url}/#/progress")
             expect(old.locator('.week-progress-card').nth(1)).to_contain_text('15 из 15 задач')
             expect(old.locator('.week-progress-card').nth(2)).to_contain_text('0 из 15 задач')
+            previous = [lesson for lesson in lessons if lesson['week'] <= 3]
+            old_save['solved'] = {task['id']: {'helped': False, 'at': '2026-10-25T00:00:00Z'} for lesson in previous for task in lesson['exercises']}
+            old_save['quizzes'] = {lesson['id']: True for lesson in previous}
+            old_save['lastExercise'] = 'bytes-3'
+            old_save['drafts']['bytes-3'] = '# мои расчёты памяти'
+            old.goto(url + "/")
+            old.evaluate("data => localStorage.setItem('olymp-learning-v1', JSON.stringify(data))", old_save)
+            old.reload(wait_until="networkidle")
+            expect(old.get_by_role('link', name='Продолжить обучение')).to_have_attribute('href', '#/lesson/text')
+            assert old.evaluate("JSON.parse(localStorage.getItem('olymp-learning-v1'))") == old_save
+            old.goto(f"{url}/#/progress")
+            expect(old.locator('.week-progress-card').nth(2)).to_contain_text('15 из 15 задач')
+            expect(old.locator('.week-progress-card').nth(3)).to_contain_text('0 из 15 задач')
+            old.goto(f"{url}/#/lesson/bytes")
+            expect(old.locator('.cm-content')).to_contain_text('# мои расчёты памяти')
             old_context.close()
             print("PASS: original week-one saves, drafts, help history and resume into week two", flush=True)
 
@@ -274,6 +290,31 @@ def main():
             page.screenshot(path=str(ARTIFACTS / 'bytes-desktop.png'), full_page=True)
             print('PASS: week-three navigation, week-two saves/resume, empty loop output, range error, task-B mistakes/recovery', flush=True)
 
+            page.goto(f"{url}/#/week/4")
+            expect(page.locator('.lesson-card')).to_have_count(5)
+            page.screenshot(path=str(ARTIFACTS / 'week-four-desktop.png'), full_page=True)
+            page.goto(f"{url}/#/lesson/lists")
+            page.locator('.exercise-switcher button').nth(2).click()
+            list_task = next(lesson for lesson in lessons if lesson['id'] == 'lists')['exercises'][2]
+            run(list_task['starter'])
+            expect(page.locator('.error-feedback')).to_contain_text('Такой позиции нет')
+            run('words = {20: "twenty"}\nprint(words["20"])')
+            expect(page.locator('.error-feedback')).to_contain_text('Такого ключа нет')
+            for lesson_id in ('number-words', 'years'):
+                page.goto(f"{url}/#/lesson/{lesson_id}")
+                page.locator('.word-reference summary').click()
+                expect(page.locator('.word-reference tbody tr')).to_have_count(29)
+                expect(page.locator('.word-reference')).to_contain_text('forty')
+            page.locator('.word-reference').screenshot(path=str(ARTIFACTS / 'english-reference.png'))
+            page.locator('.exercise-switcher button').nth(2).click()
+            year_task = next(lesson for lesson in lessons if lesson['id'] == 'years')['exercises'][2]
+            run(year_task['solution'].replace('"-"', '" "'), 'check')
+            expect(page.locator('.test-failure')).to_contain_text('Ответ пока не совпал')
+            run(year_task['solution'], 'check')
+            expect(page.locator('.test-success')).to_contain_text('127 из 127')
+            page.screenshot(path=str(ARTIFACTS / 'years-desktop.png'), full_page=True)
+            print('PASS: week-four navigation, previous saves/resume, index/key errors, vocabulary and year formatting', flush=True)
+
             # Phone navigation and layout must have no horizontal page overflow.
             mobile = context.new_page()
             mobile.set_viewport_size({"width": 390, "height": 844})
@@ -282,9 +323,12 @@ def main():
             expect(mobile.locator(".sidebar")).to_have_class("sidebar open")
             mobile.locator(".main-nav").get_by_role("link", name="Мой прогресс").click()
             expect(mobile.locator(".sidebar")).to_have_class("sidebar ")
-            for path, screenshot in [("/", "dashboard-mobile.png"), ("/lesson/input", "lesson-mobile.png"), ("/guide", "guide-mobile.png"), ("/week/2", "week-two-mobile.png"), ("/lesson/font", "font-mobile.png"), ("/week/3", "week-three-mobile.png"), ("/lesson/bytes", "bytes-mobile.png")]:
+            for path, screenshot in [("/", "dashboard-mobile.png"), ("/lesson/input", "lesson-mobile.png"), ("/guide", "guide-mobile.png"), ("/week/2", "week-two-mobile.png"), ("/lesson/font", "font-mobile.png"), ("/week/3", "week-three-mobile.png"), ("/lesson/bytes", "bytes-mobile.png"), ("/week/4", "week-four-mobile.png"), ("/lesson/years", "years-mobile.png")]:
                 mobile.goto(f"{url}/#{path}", wait_until="networkidle")
                 assert mobile.evaluate("document.documentElement.scrollWidth <= innerWidth"), path
+                if path == '/lesson/years':
+                    mobile.locator('.word-reference summary').click()
+                    assert mobile.evaluate("document.documentElement.scrollWidth <= innerWidth"), 'open reference table'
                 mobile.screenshot(path=str(ARTIFACTS / screenshot), full_page=True, animations="disabled")
             mobile.close()
             # Runtime download error is actionable and retry works.

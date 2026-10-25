@@ -114,3 +114,68 @@ def check_week_three(lessons):
             rejected |= output.getvalue().rstrip('\n') != case['expected']
         assert rejected, 'Task B checks missed a common mistake'
     print('PASS: week-three expectations, 3 PDF samples, all 5120 task-B inputs and common wrong solutions', flush=True)
+
+
+def check_week_four(lessons):
+    # Independently transcribed names from PDF p. 5; decade groups build an oracle
+    # without reusing the student solution's numeric-key lookup or branch chain.
+    ones = 'one two three four five six seven eight nine'.split()
+    teens = 'ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen'.split()
+    decades = 'twenty thirty forty fifty sixty seventy eighty ninety'.split()
+    names = ['', *ones, *teens]
+    for decade in decades:
+        names.extend([decade, *[f'{decade}-{one}' for one in ones]])
+    years = {1900: 'nineteen hundred', 2000: 'two thousand'}
+    years.update({1900+i: 'nineteen oh '+word for i, word in enumerate(ones, 1)})
+    years.update({1900+i: 'nineteen '+names[i] for i in range(10, 100)})
+    years.update({2000+i: 'two thousand '+word for i, word in enumerate(ones, 1)})
+    years.update({2000+i: 'twenty '+names[i] for i in range(10, 27)})
+    assert len(years) == 127
+    tasks = {task['id']: task for lesson in lessons for task in lesson['exercises']}
+    def expected(task_id, raw):
+        lines = raw.splitlines()
+        if task_id == 'text-1': return str(len(raw))
+        if task_id == 'text-2': return raw[0] + '\n' + raw[-1]
+        if task_id == 'text-3': return '-'.join(lines)
+        if task_id == 'lists-1': return (['zero'] + ones)[int(raw)]
+        if task_id == 'lists-2': return '\n'.join(reversed(lines[1:]))
+        if task_id == 'lists-3': return str(int(lines[1]) + int(lines[-1]))
+        if task_id == 'dictionaries-1': return {'ru':'Привет','en':'Hello','ky':'Салам'}[raw]
+        if task_id == 'dictionaries-2': return names[int(raw)]
+        if task_id == 'dictionaries-3': return {'cat':'кот','dog':'собака','bird':'птица'}.get(raw, 'Неизвестно')
+        if task_id.startswith('number-words-'): return names[int(raw)]
+        if task_id.startswith('years-'): return years[int(raw)]
+        raise AssertionError(task_id)
+    for lesson in lessons:
+        if lesson['week'] != 4: continue
+        for task in lesson['exercises']:
+            for case in [task['sample'], *task['tests']]:
+                assert case['expected'] == expected(task['id'], case['input']), (task['id'], case)
+    final = tasks['years-3']
+    assert {int(case['input']) for case in final['tests']} == set(range(1900, 2027))
+    pdf_samples = {2026:'twenty twenty-six', 1900:'nineteen hundred', 2000:'two thousand',
+                   1905:'nineteen oh five', 2007:'two thousand seven', 1940:'nineteen forty'}
+    for year, answer in pdf_samples.items():
+        assert {'input': str(year), 'expected': answer} in final['tests']
+    import contextlib
+    import io
+    def run(code, raw):
+        data = iter(raw.splitlines())
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            exec(code, {'input': lambda: next(data)})
+        return output.getvalue().rstrip('\n')
+    for raw, expected_output in years.items():
+        assert run(final['solution'], str(raw)) == expected_output, raw
+    mutants = [final['solution'].replace('nineteen oh ', 'nineteen zero '),
+               final['solution'].replace('elif y < 2010:', 'elif y < 2027:'),
+               final['solution'].replace('"-"', '" "'),
+               final['solution'].replace('if n % 10 != 0:', 'if n % 10 >= 0:')]
+    for mutant in mutants:
+        assert any(run(mutant, case['input']) != case['expected'] for case in final['tests'])
+    for lesson_id in ('number-words', 'years'):
+        table = next(lesson for lesson in lessons if lesson['id'] == lesson_id)['referenceTable']
+        assert dict(table['rows']) == {**{str(i):names[i] for i in range(1,20)},
+                                      **{str(i):names[i] for i in range(20,100,10)},
+                                      '100':'hundred', '1000':'thousand'}
+    print('PASS: week-four answers, vocabulary, all 127 years, six PDF samples and common pronunciation mistakes', flush=True)
