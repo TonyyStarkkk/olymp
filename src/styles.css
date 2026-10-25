@@ -3419,3 +3419,81 @@ button {
   font-family: "SFMono-Regular", Consolas, monospace;
   font-weight: 600;
 }
+
+.cube-explorer {
+  margin: 24px 0 32px;
+  padding: 20px;
+  border: 1px solid #d5d5d5;
+  border-radius: 12px;
+  background: #fff;
+  color: #111;
+}
+
+.cube-explorer h2 {
+  margin-top: 0;
+}
+
+.cube-explorer p {
+  line-height: 1.7;
+}
+
+.cube-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.cube-controls label {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.cube-controls input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  accent-color: #222;
+  cursor: pointer;
+}
+
+.cube-presets,
+.cube-chain {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cube-presets button {
+  padding: 10px 12px;
+  border: 1px solid #999;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.cube-presets button:hover {
+  background: #eee;
+}
+
+.cube-result {
+  margin-top: 20px;
+  border-top: 1px solid #ddd;
+}
+
+.cube-piece {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 36px;
+  border: 1px solid #777;
+  border-radius: 5px;
+  background: #f3f3f3;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-weight: 700;
+  color: #111;
+}

@@ -13,7 +13,7 @@ import time
 import urllib.request
 
 from playwright.sync_api import sync_playwright, expect
-from content_checks import check_week_two, check_week_three, check_week_four, check_week_five
+from content_checks import check_week_two, check_week_three, check_week_four, check_week_five, check_week_six
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "test-results"
@@ -43,6 +43,7 @@ def main():
     check_week_three(lessons)
     check_week_four(lessons)
     check_week_five(lessons)
+    check_week_six(lessons)
     check_reference_solutions()
     server = None
     server_log = None
@@ -280,6 +281,21 @@ def main():
             expect(old.locator('.week-progress-card').nth(4)).to_contain_text('0 из 15 задач')
             old.goto(f"{url}/#/lesson/years")
             expect(old.locator('.cm-content')).to_contain_text('# мой перевод года')
+            previous = [lesson for lesson in lessons if lesson['week'] <= 5]
+            old_save['solved'] = {task['id']: {'helped': False, 'at': '2026-10-25T00:00:00Z'} for lesson in previous for task in lesson['exercises']}
+            old_save['quizzes'] = {lesson['id']: True for lesson in previous}
+            old_save['lastExercise'] = 'passwords-3'
+            old_save['drafts']['passwords-3'] = '# мои пароли'
+            old.goto(url + "/")
+            old.evaluate("data => localStorage.setItem('olymp-learning-v1', JSON.stringify(data))", old_save)
+            old.reload(wait_until="networkidle")
+            expect(old.get_by_role('link', name='Продолжить обучение')).to_have_attribute('href', '#/lesson/extremes')
+            assert old.evaluate("JSON.parse(localStorage.getItem('olymp-learning-v1'))") == old_save
+            old.goto(f"{url}/#/progress")
+            expect(old.locator('.week-progress-card').nth(4)).to_contain_text('15 из 15 задач')
+            expect(old.locator('.week-progress-card').nth(5)).to_contain_text('0 из 15 задач')
+            old.goto(f"{url}/#/lesson/passwords")
+            expect(old.locator('.cm-content')).to_contain_text('# мои пароли')
             old_context.close()
             print("PASS: original week-one saves, drafts, help history and resume into week two", flush=True)
 
@@ -354,6 +370,39 @@ def main():
             page.screenshot(path=str(ARTIFACTS / 'passwords-desktop.png'), full_page=True)
             print('PASS: week-five navigation, retained progress, interactive routes and duplicate-count rejection', flush=True)
 
+            page.goto(f"{url}/#/lesson/neighbors")
+            page.locator('.exercise-switcher button').nth(1).click()
+            neighbor_task = next(lesson for lesson in lessons if lesson['id'] == 'neighbors')['exercises'][1]
+            page.locator('.input-panel textarea').fill('\n')
+            run(neighbor_task['solution'])
+            expect(page.locator('.console-output')).to_have_text('YES\n')
+            page.goto(f"{url}/#/week/6")
+            expect(page.locator('.lesson-card')).to_have_count(5)
+            page.screenshot(path=str(ARTIFACTS / 'week-six-desktop.png'), full_page=True)
+            page.goto(f"{url}/#/lesson/cubes")
+            for preset, length in [('0 / 2 / 2', 4), ('5 / 3 / 4', 12), ('1 / 0 / 4', 3), ('0 / 0 / 0', 0)]:
+                page.get_by_role('button', name=preset, exact=True).click()
+                expect(page.locator('.cube-result')).to_contain_text(f'Максимальная длина: {length}')
+                expect(page.locator('.cube-piece')).to_have_count(length)
+            expect(page.locator('.cube-result')).to_contain_text('цепочка пустая')
+            page.get_by_role('slider', name='R — красные').press('End')
+            expect(page.locator('.cube-result')).to_contain_text('Максимальная длина: 1')
+            expect(page.locator('.cube-remaining')).to_contain_text('R — 5')
+            page.get_by_role('slider', name='G — зелёные').press('ArrowRight')
+            page.get_by_role('slider', name='G — зелёные').press('ArrowRight')
+            page.get_by_role('slider', name='B — синие').press('ArrowRight')
+            expect(page.locator('.cube-result')).to_contain_text('Максимальная длина: 7')
+            page.locator('.cube-explorer').screenshot(path=str(ARTIFACTS / 'cube-explorer.png'))
+            page.locator('.exercise-switcher button').nth(1).click()
+            cube_tasks = next(lesson for lesson in lessons if lesson['id'] == 'cubes')['exercises']
+            run(cube_tasks[1]['starter'], 'check')
+            expect(page.locator('.test-failure')).to_contain_text('Ответ пока не совпал')
+            page.locator('.exercise-switcher button').nth(2).click()
+            run(cube_tasks[2]['solution'], 'check')
+            expect(page.locator('.test-success')).to_contain_text('Все проверки пройдены')
+            page.screenshot(path=str(ARTIFACTS / 'cubes-desktop.png'), full_page=True)
+            print('PASS: week-six navigation, five-week saves, cube explorer and missing-stock-bound rejection', flush=True)
+
             # Phone navigation and layout must have no horizontal page overflow.
             mobile = context.new_page()
             mobile.set_viewport_size({"width": 390, "height": 844})
@@ -362,9 +411,13 @@ def main():
             expect(mobile.locator(".sidebar")).to_have_class("sidebar open")
             mobile.locator(".main-nav").get_by_role("link", name="Мой прогресс").click()
             expect(mobile.locator(".sidebar")).to_have_class("sidebar ")
-            for path, screenshot in [("/", "dashboard-mobile.png"), ("/lesson/input", "lesson-mobile.png"), ("/guide", "guide-mobile.png"), ("/week/2", "week-two-mobile.png"), ("/lesson/font", "font-mobile.png"), ("/week/3", "week-three-mobile.png"), ("/lesson/bytes", "bytes-mobile.png"), ("/week/4", "week-four-mobile.png"), ("/lesson/years", "years-mobile.png"), ("/week/5", "week-five-mobile.png"), ("/lesson/passwords", "passwords-mobile.png")]:
+            for path, screenshot in [("/", "dashboard-mobile.png"), ("/lesson/input", "lesson-mobile.png"), ("/guide", "guide-mobile.png"), ("/week/2", "week-two-mobile.png"), ("/lesson/font", "font-mobile.png"), ("/week/3", "week-three-mobile.png"), ("/lesson/bytes", "bytes-mobile.png"), ("/week/4", "week-four-mobile.png"), ("/lesson/years", "years-mobile.png"), ("/week/5", "week-five-mobile.png"), ("/lesson/passwords", "passwords-mobile.png"), ("/week/6", "week-six-mobile.png"), ("/lesson/cubes", "cubes-mobile.png")]:
                 mobile.goto(f"{url}/#{path}", wait_until="networkidle")
                 assert mobile.evaluate("document.documentElement.scrollWidth <= innerWidth"), path
+                if path == '/lesson/cubes':
+                    mobile.get_by_role('button', name='5 / 3 / 4', exact=True).click()
+                    expect(mobile.locator('.cube-piece')).to_have_count(12)
+                    assert mobile.evaluate("document.documentElement.scrollWidth <= innerWidth"), 'cube chain'
                 if path == '/lesson/passwords':
                     mobile.get_by_label('Пример маршрута').select_option('ytrewq')
                     expect(mobile.locator('.keyboard-explanation')).to_contain_text('Не подходит по условию')

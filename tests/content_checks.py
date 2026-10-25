@@ -274,3 +274,112 @@ def check_week_five(lessons):
                 raw = f'{text}\n{k}'
                 assert run(tasks['unique-3']['solution'],raw) == expected('unique-3',raw)
     print('PASS: week-five answers, complete keyboard geometry, PDF examples, all ten lengths and overlapping/unique windows', flush=True)
+
+
+def check_week_six(lessons):
+    import contextlib
+    from functools import lru_cache
+    from itertools import product
+    import io
+    import json
+    import subprocess
+
+    tasks = {task['id']: task for lesson in lessons for task in lesson['exercises']}
+
+    @lru_cache(None)
+    def longest(r, g, b, previous=-1):
+        counts = (r, g, b)
+        best = 0
+        for color, count in enumerate(counts):
+            if count and color != previous:
+                remaining = list(counts)
+                remaining[color] -= 1
+                best = max(best, 1 + longest(*remaining, color))
+        return best
+
+    def run(code, raw):
+        data = iter(raw.split('\n'))
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            exec(code, {'input': lambda: next(data)})
+        return output.getvalue().rstrip('\n')
+
+    def expected(task_id, raw):
+        if task_id.startswith('neighbors-'):
+            raw = raw.rstrip('\n')
+            bad = sum(left == right for left, right in zip(raw, raw[1:]))
+            return ('YES' if bad == 0 else 'NO') if task_id == 'neighbors-2' else str(bad)
+        ns = list(map(int, raw.splitlines()))
+        if task_id == 'extremes-1': return str(sorted(ns)[-1])
+        if task_id == 'extremes-2': return str(sum(sorted(ns)[:2]))
+        if task_id == 'extremes-3': return str(sorted(ns)[0])
+        if task_id == 'separators-1': return str(ns[0] + 1)
+        if task_id == 'efficiency-1': return str(ns[0] ** 2)
+        if task_id == 'efficiency-2': return str(ns[0] * (ns[0] + 1) // 2)
+        if task_id == 'separators-2': ns.append(0)
+        if max(ns) <= 8:
+            size = longest(*ns)
+        else:
+            a, b, c = sorted(ns)
+            # Discard only the excess of the last group; independent form of the bound.
+            size = a + b + c - max(0, c - a - b - 1)
+        if task_id == 'separators-3': return 'YES' if size == sum(ns) else 'NO'
+        if task_id == 'efficiency-3': return str(sum(ns) - size)
+        if task_id == 'separators-2' or task_id.startswith('cubes-'): return str(size)
+        raise AssertionError(task_id)
+
+    for lesson in lessons:
+        if lesson['week'] != 6: continue
+        assert len(lesson['exercises']) == 3
+        for task in lesson['exercises']:
+            assert len(task['hints']) == 3
+            for case in [task['sample'], *task['tests']]:
+                assert case['expected'] == expected(task['id'], case['input']), (task['id'], case)
+
+    # Exact state search tries every legal next cube, without using the teaching formula.
+    for counts in product(range(7), repeat=3):
+        raw = '\n'.join(map(str, counts))
+        size = longest(*counts)
+        assert run(tasks['cubes-3']['solution'], raw) == str(size), counts
+        assert run(tasks['separators-3']['solution'], raw) == ('YES' if size == sum(counts) else 'NO')
+        assert run(tasks['efficiency-3']['solution'], raw) == str(sum(counts) - size)
+
+    # The visual must display a genuinely maximal chain with the right inventories.
+    chains = json.loads(subprocess.check_output([
+        'node', '--experimental-strip-types', '-e',
+        "import {buildCubeChain} from './src/cube-chain.ts'; const result=[]; for(let r=0;r<=6;r++) for(let g=0;g<=6;g++) for(let b=0;b<=6;b++) result.push({counts:[r,g,b],chain:buildCubeChain([r,g,b])}); console.log(JSON.stringify(result));"
+    ], text=True))
+    for item in chains:
+        counts, chain = item['counts'], item['chain']
+        assert all(color in (0, 1, 2) for color in chain)
+        assert all(a != b for a, b in zip(chain, chain[1:])), item
+        assert all(chain.count(color) <= counts[color] for color in range(3)), item
+        assert len(chain) == longest(*counts), item
+
+    final = tasks['cubes-3']
+    explicit = {
+        '0\n2\n2': '4', '5\n3\n4': '12', '1\n0\n4': '3',
+        '0\n0\n0': '0', '3\n1\n1': '5', '4\n1\n1': '5',
+        '1000000000\n1000000000\n1000000000': '3000000000',
+        '1000000000\n499999999\n500000000': '1999999999',
+        '1000000000\n499999999\n499999999': '1999999997',
+    }
+    indexed = {case['input']: case['expected'] for case in final['tests']}
+    for raw, result in explicit.items():
+        assert indexed[raw] == result
+        assert run(final['solution'], raw) == result
+    mutants = [tasks['cubes-2']['starter'],
+               final['solution'].replace('2 * others + 1', '2 * others'),
+               final['solution'].replace('max(r, g, b)', 'r'),
+               final['solution'].replace('min(total, 2 * others + 1)', 'total'),
+               final['solution'].replace('min(total, 2 * others + 1)', 'max(total, 2 * others + 1)')]
+    for mutant in mutants:
+        assert any(run(mutant, case['input']) != case['expected'] for case in final['tests'])
+    for n in range(7):
+        for chars in product('RG', repeat=n):
+            raw = ''.join(chars)
+            assert run(tasks['neighbors-2']['solution'], raw) == expected('neighbors-2', raw)
+    assert 'RGBGRBRBRGBR'.count('R') == 5
+    assert 'RGBGRBRBRGBR'.count('G') == 3
+    assert 'RGBGRBRBRGBR'.count('B') == 4
+    print('PASS: week-six answers, 343 exhaustive cube inventories and visual chains, PDF samples, billion-scale boundaries and incorrect-solution rejection', flush=True)

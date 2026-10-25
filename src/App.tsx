@@ -1,4 +1,5 @@
 import KeyboardPaths from "./KeyboardPaths";
+import CubeExplorer from "./CubeExplorer";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
@@ -733,6 +734,7 @@ function LessonView({
                   ))}
                 </div>
                 {lesson.showKeyboard && <KeyboardPaths />}
+                {lesson.showCubes && <CubeExplorer />}
                 {lesson.sections.map((section, i) => (
                   <article className="theory-section" key={section.title}>
                     <span className="section-number">0{i + 1}</span>
@@ -1666,6 +1668,21 @@ function Guide() {
       "Не считать повторы",
       'seen = []\nfor letter in "abaca":\n    if letter not in seen:\n        seen.append(letter)\nprint(len(seen))  # 3',
       "in у списка проверяет значение, у словаря — ключ, у строки — непрерывный фрагмент. Для небольшого числа вариантов список seen помогает убрать повторы.",
+    ],
+    [
+      "Найти минимум и максимум",
+      "r = 5\ng = 3\nb = 4\nlargest = max(r, g, b)\nothers = r + g + b - largest\nprint(min(r + g + b, 2 * others + 1))",
+      "max выбирает наибольшее число, min — наименьшее. Вычитай один максимум, даже если несколько значений равны. В задаче C длину ограничивают общий запас и число разделителей.",
+    ],
+    [
+      "Проверить соседей",
+      'text = "RGGB"\nbad = 0\nfor i in range(len(text) - 1):\n    if text[i] == text[i + 1]:\n        bad = bad + 1\nprint(bad)  # 1',
+      "У n символов n − 1 соседних пар, если строка непустая. Последний i равен n − 2, поэтому i + 1 остаётся внутри строки. В RGR повторение R разрешено: буквы не соседние.",
+    ],
+    [
+      "Оценить количество действий",
+      "n = 1000000000\nprint(n * n)\nprint(n * (n + 1) // 2)",
+      "Первое число — количество шагов двух вложенных циклов по n. Второе — сумма 1…n. Формулы вычисляют результат без перебора миллиарда элементов; целочисленное // сохраняет точность.",
     ],
   ];
   return (
