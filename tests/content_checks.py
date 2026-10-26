@@ -383,3 +383,106 @@ def check_week_six(lessons):
     assert 'RGBGRBRBRGBR'.count('G') == 3
     assert 'RGBGRBRBRGBR'.count('B') == 4
     print('PASS: week-six answers, 343 exhaustive cube inventories and visual chains, PDF samples, billion-scale boundaries and incorrect-solution rejection', flush=True)
+
+
+def check_week_seven(lessons):
+    from bisect import bisect_right
+    import contextlib
+    from functools import lru_cache
+    import io
+    import random
+
+    tasks = {task['id']: task for lesson in lessons for task in lesson['exercises']}
+    compiled = {key: compile(task['solution'], key, 'exec') for key, task in tasks.items() if key.startswith(('sets-', 'next-small-', 'prefixes-', 'viral-', 'tour-plan-'))}
+    def run(task_id, raw, code=None):
+        data = iter(raw.split('\n'))
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            exec(code or compiled[task_id], {'input': lambda: next(data)})
+        return output.getvalue().rstrip('\n')
+
+    def unique(n):
+        mask = 0
+        while True:
+            n, d = divmod(n, 10)
+            if mask & (1 << d): return False
+            mask |= 1 << d
+            if n == 0: return True
+
+    # Independent search by length and digit-mask state, with a lower bound n+1.
+    # It does not use prefix replacements or the reference solution's fallback string.
+    def successor(n):
+        for length in range(len(str(n + 1)), 11):
+            digits = list(map(int, str(n + 1).zfill(length)))
+            @lru_cache(None)
+            def visit(pos, mask, tight):
+                if pos == length: return ''
+                lower = digits[pos] if tight else 0
+                for d in range(max(lower, int(pos == 0)), 10):
+                    if mask & (1 << d): continue
+                    tail = visit(pos + 1, mask | (1 << d), tight and d == digits[pos])
+                    if tail is not None: return str(d) + tail
+                return None
+            value = visit(0, 0, True)
+            if value is not None: return int(value)
+        return 0
+
+    def expected(task_id, raw):
+        lines = raw.splitlines()
+        if task_id == 'sets-1': return str(len({int(d) for d in str(int(raw))}))
+        if task_id == 'sets-2': return 'YES' if unique(int(raw)) else 'NO'
+        if task_id == 'sets-3': return str(len(set(lines[1:])))
+        if task_id == 'next-small-1': return str(successor(int(raw)))
+        if task_id == 'next-small-2':
+            candidate = successor(int(raw))
+            return str(candidate if candidate <= 9999 else 0)
+        if task_id in ('next-small-3', 'viral-3'):
+            assert len(lines) == 10
+            return '\n'.join(str(successor(int(n))) for n in lines)
+        if task_id in ('viral-1', 'viral-2'): return str(successor(int(raw)))
+        if task_id == 'prefixes-1':
+            prefix = str(int(lines[0]))[:int(lines[1])]
+            return 'YES' if all(prefix.count(d) == 1 for d in prefix) else 'NO'
+        if task_id == 'prefixes-2':
+            prefix, length = lines[0], int(lines[1])
+            available = sorted(set('0123456789').difference(prefix))
+            return prefix + ''.join(available[:length-len(prefix)])
+        if task_id == 'prefixes-3':
+            k = int(raw)
+            return '1' if k == 1 else '10' + ''.join(map(str, range(2, k)))
+        if task_id == 'tour-plan-1': return str(max(0, 180-int(raw)))
+        if task_id == 'tour-plan-2': return 'YES' if sum(map(int, lines)) <= 180 else 'NO'
+        if task_id == 'tour-plan-3': return str(sum(unique(n) for n in range(int(lines[0]), int(lines[1])+1)))
+        raise AssertionError(task_id)
+
+    for lesson in lessons:
+        if lesson['week'] != 7: continue
+        for task in lesson['exercises']:
+            assert len(task['hints']) == 3
+            for case in [task['sample'], *task['tests']]:
+                assert case['expected'] == expected(task['id'], case['input']), (task['id'], case)
+
+    small = [n for n in range(10235) if unique(n)]
+    for n in range(10000):
+        want = small[bisect_right(small, n)]
+        assert successor(n) == want, n
+        assert run('viral-1', str(n)) == str(want), n
+    rng = random.Random(20261026)
+    cases = [rng.randrange(10**10) for _ in range(400)] + [10**k-1 for k in range(1,11)] + [9876543208,9876543209,9876543210,9876543211,8999999999]
+    for n in cases:
+        want = successor(n)
+        assert run('viral-1', str(n)) == str(want), n
+        assert want == 0 or (want > n and unique(want)), (n, want)
+    # Check all lengths and the mathematical last possible permutation.
+    assert successor(0) == 1
+    assert successor(98) == 102
+    assert successor(9876543209) == 9876543210
+    assert successor(9876543210) == successor(9999999999) == 0
+    final = tasks['viral-3']
+    mutants = [final['solution'].replace('digit > text[pos]', 'digit >= text[pos]'),
+               final['solution'].replace('range(10):', 'range(9):', 1),
+               final['solution'].replace('if answer == 0 and len(text) < 10:', 'if False:'),
+               final['solution'].replace('if len(set(prefix)) == len(prefix):', 'if True:')]
+    for mutant in mutants:
+        assert any(run('viral-3', case['input'], mutant) != case['expected'] for case in final['tests'])
+    print('PASS: week-seven answers, all 10000 small successors, 415 large/boundary searches, ten-query format and common F mistakes', flush=True)

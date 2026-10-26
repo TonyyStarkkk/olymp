@@ -44,7 +44,7 @@ import type { RunResult } from "./usePython";
 
 type SetProgress = Dispatch<SetStateAction<Progress>>;
 type View = {
-  kind: "home" | "progress" | "guide" | "week" | "lesson";
+  kind: "home" | "progress" | "guide" | "week" | "lesson" | "contest";
   id?: string;
 };
 function getView(): View {
@@ -53,11 +53,12 @@ function getView(): View {
     return { kind: "lesson", id: parts[1] };
   if (parts[0] === "week" && /^[1-8]$/.test(parts[1]))
     return { kind: "week", id: parts[1] };
-  if (parts[0] === "progress" || parts[0] === "guide")
+  if (parts[0] === "progress" || parts[0] === "guide" || parts[0] === "contest")
     return { kind: parts[0] };
   return { kind: "home" };
 }
 const CodeEditor = lazy(() => import("./CodeEditor"));
+const MockContest = lazy(() => import("./MockContest"));
 
 export default function App() {
   const [loaded] = useState(loadProgress);
@@ -156,6 +157,13 @@ export default function App() {
             <Code2 size={19} />
             Памятка Python
           </a>
+          <a
+            href="#/contest"
+            className={view.kind === "contest" ? "active" : ""}
+          >
+            <Trophy size={19} />
+            Тренировочный тур
+          </a>
         </nav>
         <div className="sidebar-divider" />
         <div className="sidebar-caption">
@@ -233,13 +241,15 @@ export default function App() {
             <span className="breadcrumb">Моё обучение</span>
             <ChevronRight size={14} />
             <strong>
-              {view.kind === "progress"
-                ? "Мой прогресс"
-                : view.kind === "guide"
-                  ? "Памятка Python"
-                  : currentLesson
-                    ? currentLesson.title
-                    : "Python с нуля"}
+              {view.kind === "contest"
+                ? "Тренировочный тур"
+                : view.kind === "progress"
+                  ? "Мой прогресс"
+                  : view.kind === "guide"
+                    ? "Памятка Python"
+                    : currentLesson
+                      ? currentLesson.title
+                      : "Python с нуля"}
             </strong>
           </div>
           <div className="topbar-right">
@@ -282,6 +292,11 @@ export default function App() {
             />
           )}
           {view.kind === "guide" && <Guide />}
+          {view.kind === "contest" && (
+            <Suspense fallback={<p className="page">Загрузка тура…</p>}>
+              <MockContest />
+            </Suspense>
+          )}
         </main>
         <footer className="page-footer">
           <span>
@@ -604,6 +619,18 @@ function WeekOverview({
           </a>
         </div>
       )}
+      {week === 7 && (
+        <section className="contest-intro">
+          <h2>Первая репетиция</h2>
+          <p>
+            Шесть задач A–F, 180 минут и отдельные результаты. Начни после
+            уроков этой недели.
+          </p>
+          <a className="button primary" href="#/contest">
+            Открыть тренировочный тур
+          </a>
+        </section>
+      )}
       <div className="week-pagination">
         {week > 1 ? (
           <a href={`#/week/${week - 1}`}>
@@ -904,7 +931,12 @@ function LessonView({
               : "Ответь на вопрос во вкладке «Разобраться» и пройди проверку трёх заданий."}
           </p>
         </div>
-        {index < lessons.length - 1 ? (
+        {lesson.id === "tour-plan" ? (
+          <a className="button secondary" href="#/contest">
+            Перейти к тренировочному туру
+            <Trophy size={17} />
+          </a>
+        ) : index < lessons.length - 1 ? (
           <a
             className="button secondary"
             href={`#/lesson/${lessons[index + 1].id}`}
@@ -1683,6 +1715,21 @@ function Guide() {
       "Оценить количество действий",
       "n = 1000000000\nprint(n * n)\nprint(n * (n + 1) // 2)",
       "Первое число — количество шагов двух вложенных циклов по n. Второе — сумма 1…n. Формулы вычисляют результат без перебора миллиарда элементов; целочисленное // сохраняет точность.",
+    ],
+    [
+      "Создать множество",
+      'seen = set()\nseen.add("a")\nseen.add("a")\nprint(len(seen))  # 1\nprint("a" in seen)',
+      "Множество хранит значения без повторений. add добавляет элемент; порядок не гарантирован, индексов нет. Пустые {} создают словарь, а не множество.",
+    ],
+    [
+      "Проверить цифры числа",
+      "n = 120\ntext = str(n)\nprint(len(set(text)) == len(text))  # True",
+      "Сравни число всех цифр с числом разных. У нуля одна цифра. Проверка уникальности ещё не ищет следующее число: в F ответ должен быть строго больше входа.",
+    ],
+    [
+      "Достроить минимальный хвост",
+      'candidate = "23"\nsize = 5\nfor digit in "0123456789":\n    if len(candidate) < size and digit not in candidate:\n        candidate = candidate + digit\nprint(candidate)  # 23014',
+      "Начало должно быть без повторений и ведущего нуля. Свободные цифры в возрастающем порядке дают наименьшее продолжение; size не больше 10.",
     ],
   ];
   return (

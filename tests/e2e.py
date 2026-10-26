@@ -13,7 +13,8 @@ import time
 import urllib.request
 
 from playwright.sync_api import sync_playwright, expect
-from content_checks import check_week_two, check_week_three, check_week_four, check_week_five, check_week_six
+from contest_checks import check_contest
+from content_checks import check_week_two, check_week_three, check_week_four, check_week_five, check_week_six, check_week_seven
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "test-results"
@@ -44,6 +45,7 @@ def main():
     check_week_four(lessons)
     check_week_five(lessons)
     check_week_six(lessons)
+    check_week_seven(lessons)
     check_reference_solutions()
     server = None
     server_log = None
@@ -296,6 +298,21 @@ def main():
             expect(old.locator('.week-progress-card').nth(5)).to_contain_text('0 из 15 задач')
             old.goto(f"{url}/#/lesson/passwords")
             expect(old.locator('.cm-content')).to_contain_text('# мои пароли')
+            previous = [lesson for lesson in lessons if lesson['week'] <= 6]
+            old_save['solved'] = {task['id']: {'helped': False, 'at': '2026-10-26T00:00:00Z'} for lesson in previous for task in lesson['exercises']}
+            old_save['quizzes'] = {lesson['id']: True for lesson in previous}
+            old_save['lastExercise'] = 'cubes-3'
+            old_save['drafts']['cubes-3'] = '# моя цепочка'
+            old.goto(url + "/")
+            old.evaluate("data => localStorage.setItem('olymp-learning-v1', JSON.stringify(data))", old_save)
+            old.reload(wait_until="networkidle")
+            expect(old.get_by_role('link', name='Продолжить обучение')).to_have_attribute('href', '#/lesson/sets')
+            assert old.evaluate("JSON.parse(localStorage.getItem('olymp-learning-v1'))") == old_save
+            old.goto(f"{url}/#/progress")
+            expect(old.locator('.week-progress-card').nth(5)).to_contain_text('15 из 15 задач')
+            expect(old.locator('.week-progress-card').nth(6)).to_contain_text('0 из 15 задач')
+            old.goto(f"{url}/#/lesson/cubes")
+            expect(old.locator('.cm-content')).to_contain_text('# моя цепочка')
             old_context.close()
             print("PASS: original week-one saves, drafts, help history and resume into week two", flush=True)
 
@@ -403,6 +420,20 @@ def main():
             page.screenshot(path=str(ARTIFACTS / 'cubes-desktop.png'), full_page=True)
             print('PASS: week-six navigation, five-week saves, cube explorer and missing-stock-bound rejection', flush=True)
 
+            page.goto(f"{url}/#/week/7")
+            expect(page.locator('.lesson-card')).to_have_count(5)
+            expect(page.get_by_role('link', name='Открыть тренировочный тур')).to_have_attribute('href', '#/contest')
+            page.screenshot(path=str(ARTIFACTS / 'week-seven-desktop.png'), full_page=True)
+            page.goto(f"{url}/#/lesson/viral")
+            page.locator('.exercise-switcher button').nth(1).click()
+            viral = next(lesson for lesson in lessons if lesson['id'] == 'viral')['exercises']
+            run(viral[1]['starter'], 'check')
+            expect(page.locator('.test-failure')).to_contain_text('Ответ пока не совпал')
+            page.locator('.exercise-switcher button').nth(2).click()
+            run(viral[2]['solution'], 'check')
+            expect(page.locator('.test-success')).to_contain_text('Все проверки пройдены')
+            check_contest(browser, url, lessons, ARTIFACTS)
+
             # Phone navigation and layout must have no horizontal page overflow.
             mobile = context.new_page()
             mobile.set_viewport_size({"width": 390, "height": 844})
@@ -411,7 +442,7 @@ def main():
             expect(mobile.locator(".sidebar")).to_have_class("sidebar open")
             mobile.locator(".main-nav").get_by_role("link", name="Мой прогресс").click()
             expect(mobile.locator(".sidebar")).to_have_class("sidebar ")
-            for path, screenshot in [("/", "dashboard-mobile.png"), ("/lesson/input", "lesson-mobile.png"), ("/guide", "guide-mobile.png"), ("/week/2", "week-two-mobile.png"), ("/lesson/font", "font-mobile.png"), ("/week/3", "week-three-mobile.png"), ("/lesson/bytes", "bytes-mobile.png"), ("/week/4", "week-four-mobile.png"), ("/lesson/years", "years-mobile.png"), ("/week/5", "week-five-mobile.png"), ("/lesson/passwords", "passwords-mobile.png"), ("/week/6", "week-six-mobile.png"), ("/lesson/cubes", "cubes-mobile.png")]:
+            for path, screenshot in [("/", "dashboard-mobile.png"), ("/lesson/input", "lesson-mobile.png"), ("/guide", "guide-mobile.png"), ("/week/2", "week-two-mobile.png"), ("/lesson/font", "font-mobile.png"), ("/week/3", "week-three-mobile.png"), ("/lesson/bytes", "bytes-mobile.png"), ("/week/4", "week-four-mobile.png"), ("/lesson/years", "years-mobile.png"), ("/week/5", "week-five-mobile.png"), ("/lesson/passwords", "passwords-mobile.png"), ("/week/6", "week-six-mobile.png"), ("/lesson/cubes", "cubes-mobile.png"), ("/week/7", "week-seven-mobile.png"), ("/lesson/viral", "viral-mobile.png")]:
                 mobile.goto(f"{url}/#{path}", wait_until="networkidle")
                 assert mobile.evaluate("document.documentElement.scrollWidth <= innerWidth"), path
                 if path == '/lesson/cubes':
