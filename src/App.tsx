@@ -53,7 +53,9 @@ function getView(): View {
     return { kind: "lesson", id: parts[1] };
   if (parts[0] === "week" && /^[1-8]$/.test(parts[1]))
     return { kind: "week", id: parts[1] };
-  if (parts[0] === "progress" || parts[0] === "guide" || parts[0] === "contest")
+  if (parts[0] === "contest")
+    return { kind: "contest", id: parts[1] === "final" ? "final" : "practice" };
+  if (parts[0] === "progress" || parts[0] === "guide")
     return { kind: parts[0] };
   return { kind: "home" };
 }
@@ -159,10 +161,21 @@ export default function App() {
           </a>
           <a
             href="#/contest"
-            className={view.kind === "contest" ? "active" : ""}
+            className={
+              view.kind === "contest" && view.id === "practice" ? "active" : ""
+            }
           >
             <Trophy size={19} />
             Тренировочный тур
+          </a>
+          <a
+            href="#/contest/final"
+            className={
+              view.kind === "contest" && view.id === "final" ? "active" : ""
+            }
+          >
+            <Flag size={19} />
+            Генеральная репетиция
           </a>
         </nav>
         <div className="sidebar-divider" />
@@ -242,7 +255,9 @@ export default function App() {
             <ChevronRight size={14} />
             <strong>
               {view.kind === "contest"
-                ? "Тренировочный тур"
+                ? view.id === "final"
+                  ? "Генеральная репетиция"
+                  : "Тренировочный тур"
                 : view.kind === "progress"
                   ? "Мой прогресс"
                   : view.kind === "guide"
@@ -294,7 +309,10 @@ export default function App() {
           {view.kind === "guide" && <Guide />}
           {view.kind === "contest" && (
             <Suspense fallback={<p className="page">Загрузка тура…</p>}>
-              <MockContest />
+              <MockContest
+                key={view.id}
+                kind={view.id === "final" ? "final" : "practice"}
+              />
             </Suspense>
           )}
         </main>
@@ -631,6 +649,21 @@ function WeekOverview({
           </a>
         </section>
       )}
+      {week === 8 && (
+        <section className="contest-intro">
+          <h2>Генеральная репетиция</h2>
+          <p>
+            Те же шесть задач A–F за 180 минут, теперь с пустым редактором.
+            Первая репетиция и её результаты сохранятся отдельно.
+          </p>
+          <a className="button primary" href="#/contest/final">
+            Открыть генеральную репетицию
+          </a>
+          <a className="back-link" href="#/contest">
+            Вернуться к разбору первого тура
+          </a>
+        </section>
+      )}
       <div className="week-pagination">
         {week > 1 ? (
           <a href={`#/week/${week - 1}`}>
@@ -931,7 +964,12 @@ function LessonView({
               : "Ответь на вопрос во вкладке «Разобраться» и пройди проверку трёх заданий."}
           </p>
         </div>
-        {lesson.id === "tour-plan" ? (
+        {lesson.id === "ready" ? (
+          <a className="button secondary" href="#/contest/final">
+            Перейти к генеральной репетиции
+            <Flag size={17} />
+          </a>
+        ) : lesson.id === "tour-plan" ? (
           <a className="button secondary" href="#/contest">
             Перейти к тренировочному туру
             <Trophy size={17} />
@@ -1479,7 +1517,7 @@ function ProgressView({
         <div>
           <h2>
             {percent === 100
-              ? "Все доступные уроки пройдены!"
+              ? "Все уроки курса пройдены!"
               : solved.length
                 ? "Хорошее начало. Продолжай."
                 : "Первая вершина впереди"}
@@ -1492,6 +1530,13 @@ function ProgressView({
             Прогресс растёт за проверенные решения и верные ответы, а не за
             открытые страницы.
           </p>
+          {percent === 100 && (
+            <p>
+              <a className="button secondary" href="#/contest/final">
+                Проверить себя в генеральной репетиции
+              </a>
+            </p>
+          )}
         </div>
       </div>
       <div className="stat-grid progress-stats">

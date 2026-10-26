@@ -486,3 +486,88 @@ def check_week_seven(lessons):
     for mutant in mutants:
         assert any(run('viral-3', case['input'], mutant) != case['expected'] for case in final['tests'])
     print('PASS: week-seven answers, all 10000 small successors, 415 large/boundary searches, ten-query format and common F mistakes', flush=True)
+
+
+def check_week_eight(lessons):
+    import contextlib
+    import io
+    from itertools import product
+    tasks = {task['id']: task for lesson in lessons for task in lesson['exercises']}
+    def expected(task_id, raw):
+        lines = raw.splitlines()
+        if task_id == 'review-basics-1':
+            n, k = map(int, lines)
+            whole, rest = divmod(n, k)
+            return str(whole + bool(rest))
+        if task_id == 'review-basics-2': return str(sum(int(v) in range(50,101) for v in lines[1:]))
+        if task_id == 'review-basics-3': return str(sum(range(3,int(raw)+1,3)))
+        if task_id == 'debugging-1': return str(sum(range(1,int(raw)+1)))
+        if task_id == 'debugging-2': return str(len([d for d in range(1,int(raw)+1) if int(raw)%d==0]))
+        if task_id == 'debugging-3': return str(sorted(map(int,lines[1:]))[-1]) if int(lines[0]) else 'EMPTY'
+        if task_id == 'test-design-1':
+            values=list(map(int,lines[1:]))
+            return str(next((i//2+1 for i in range(0,len(values),2) if values[i]!=values[i+1]),0))
+        if task_id == 'test-design-2':
+            r,g,b=map(int,lines[:3])
+            text=lines[3]
+            valid=all(text.count(color)<=stock for color,stock in zip('RGB',(r,g,b))) and all(a!=b for a,b in zip(text,text[1:]))
+            return 'YES' if valid else 'NO'
+        if task_id == 'test-design-3':
+            n,v=map(int,lines)
+            chars=str(v)
+            return 'YES' if v>n and all(chars.count(d)==1 for d in chars) else 'NO'
+        if task_id == 'review-olympiad-1':
+            # Already verified against the independent keyboard geometry in week five.
+            counts={case['input']:case['expected'] for case in tasks['passwords-3']['tests']}
+            assert len(lines)==int(lines[0])+1
+            return '\n'.join(counts[k] for k in lines[1:])
+        if task_id == 'review-olympiad-2':
+            a,b,c=sorted(map(int,lines))
+            return str(a+b+c-max(0,c-a-b-1))
+        if task_id == 'review-olympiad-3':
+            return next(c['expected'] for c in tasks['viral-3']['tests'] if c['input']==raw)
+        if task_id == 'ready-1': return str(sum(int(v)==0 for v in lines[1:]))
+        if task_id == 'ready-2':
+            ns=list(map(int,lines));remaining=ns[-1];count=0
+            for duration in ns[:-1]:
+                if duration>remaining: break
+                remaining-=duration;count+=1
+            return str(count)
+        if task_id == 'ready-3': return str(sum(d for d in range(10) if str(d) in str(int(raw))))
+        raise AssertionError(task_id)
+    def run(code, raw):
+        data=iter(raw.split('\n'));output=io.StringIO()
+        with contextlib.redirect_stdout(output): exec(code,{'input':lambda:next(data)})
+        return output.getvalue().rstrip('\n')
+    new=[lesson for lesson in lessons if lesson['week']==8]
+    assert len(new)==5
+    assert len(lessons)==40
+    assert len({lesson['id'] for lesson in lessons})==40
+    assert len(tasks)==120
+    for lesson in new:
+        assert len(lesson['exercises'])==3
+        for task in lesson['exercises']:
+            assert len(task['hints'])==3
+            for case in [task['sample'],*task['tests']]:
+                assert case['expected']==expected(task['id'],case['input']),(task['id'],case)
+    # Exhaust short stock/chain combinations, including the empty line in real stdin form.
+    for stocks in product(range(3), repeat=3):
+        for size in range(4):
+            for letters in product('RGB',repeat=size):
+                word=''.join(letters)
+                raw='\n'.join(map(str,stocks))+'\n'+word+('\n' if not word else '')
+                assert run(tasks['test-design-2']['solution'],raw)==expected('test-design-2',raw),(stocks,word)
+    for ns in product(range(3),repeat=6):
+        for budget in (0,3,6):
+            raw='\n'.join(map(str,(*ns,budget)))
+            assert run(tasks['ready-2']['solution'],raw)==expected('ready-2',raw)
+    for task_id in ['debugging-1','debugging-2','debugging-3','review-olympiad-2','review-olympiad-3']:
+        task=tasks[task_id];rejected=False
+        for case in task['tests']:
+            try: rejected |= run(task['starter'],case['input'])!=case['expected']
+            except (NameError,ZeroDivisionError,IndexError): rejected=True
+        assert rejected,task_id
+    # These examples deliberately demonstrate necessary properties, not optimality.
+    assert run(tasks['test-design-2']['solution'],'5\n1\n0\nR')=='YES'
+    assert run(tasks['test-design-3']['solution'],'99\n123')=='YES'
+    print('PASS: week-eight expectations, all 40 lessons/120 tasks, 1080 stock/chain checks, 2187 ordered budgets, empty input and faulty-starter rejection',flush=True)

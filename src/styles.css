@@ -3608,3 +3608,41 @@ button {
     padding: 16px;
   }
 }
+
+.review-journal {
+  margin: 20px 0;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  background: #f7f7f7;
+  color: #111;
+}
+.review-journal label {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.review-journal select,
+.review-journal textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #999;
+  border-radius: 6px;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-weight: 400;
+}
+.review-journal textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+.review-journal textarea:disabled {
+  background: #eee;
+}
+.contest-intro > .back-link {
+  margin-top: 18px;
+}

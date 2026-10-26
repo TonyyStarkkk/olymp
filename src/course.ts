@@ -4,6 +4,7 @@ import { fourthWeekLessons } from "./week4.ts";
 import { fifthWeekLessons } from "./week5.ts";
 import { sixthWeekLessons } from "./week6.ts";
 import { seventhWeekLessons } from "./week7.ts";
+import { eighthWeekLessons } from "./week8.ts";
 
 export type TestCase = { input: string; expected: string };
 export type Exercise = {
@@ -694,6 +695,7 @@ export const lessons: Lesson[] = [
   ...fifthWeekLessons,
   ...sixthWeekLessons,
   ...seventhWeekLessons,
+  ...eighthWeekLessons,
 ];
 export const getWeekLessons = (week: number) =>
   lessons.filter((lesson) => lesson.week === week);

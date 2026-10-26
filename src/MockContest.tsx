@@ -1,18 +1,21 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   CONTEST_DURATION,
-  CONTEST_KEY,
-  contestTasks,
+  getContestKey,
+  getContestTasks,
+  reviewCauses,
   newAttempt,
   readAttempt,
 } from "./contest";
+import type { ContestKind } from "./contest";
+import KeyboardPaths from "./KeyboardPaths";
 import { explainError, normalizeOutput, usePython } from "./usePython";
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
-function loadAttempt() {
+function loadAttempt(storageKey: string) {
   try {
     return {
-      data: readAttempt(localStorage.getItem(CONTEST_KEY)),
+      data: readAttempt(localStorage.getItem(storageKey)),
       warning: "",
     };
   } catch {
@@ -23,8 +26,15 @@ function loadAttempt() {
     };
   }
 }
-export default function MockContest() {
-  const [loaded] = useState(loadAttempt);
+export default function MockContest({
+  kind = "practice",
+}: {
+  kind?: ContestKind;
+}) {
+  const storageKey = getContestKey(kind);
+  const contestTasks = getContestTasks(kind);
+  const isFinal = kind === "final";
+  const [loaded] = useState(() => loadAttempt(storageKey));
   const [attempt, setAttempt] = useState(loaded.data);
   const [warning, setWarning] = useState(loaded.warning);
   const [now, setNow] = useState(Date.now());
@@ -54,13 +64,13 @@ export default function MockContest() {
   useEffect(() => {
     if (!attempt) return;
     try {
-      localStorage.setItem(CONTEST_KEY, JSON.stringify(attempt));
+      localStorage.setItem(storageKey, JSON.stringify(attempt));
     } catch {
       setWarning(
         "Не удалось сохранить тур в браузере. Скачай результат перед закрытием страницы.",
       );
     }
-  }, [attempt]);
+  }, [attempt, storageKey]);
   useEffect(() => {
     if (attempt && attempt.finishedAt === null && now >= deadline) {
       stop();
@@ -115,7 +125,9 @@ export default function MockContest() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "olymp-training-tour.json";
+    link.download = isFinal
+      ? "olymp-final-tour.json"
+      : "olymp-training-tour.json";
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -197,11 +209,13 @@ export default function MockContest() {
     .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
   return (
     <div className="page contest-page">
-      <a className="back-link" href="#/week/7">
-        ← К седьмой неделе
+      <a className="back-link" href={isFinal ? "#/week/8" : "#/week/7"}>
+        {isFinal ? "← К восьмой неделе" : "← К седьмой неделе"}
       </a>
-      <div className="eyebrow">ПЕРВАЯ РЕПЕТИЦИЯ · 180 МИНУТ</div>
-      <h1>Тренировочный тур</h1>
+      <div className="eyebrow">
+        {isFinal ? "ФИНАЛЬНАЯ" : "ПЕРВАЯ"} РЕПЕТИЦИЯ · 180 МИНУТ
+      </div>
+      <h1>{isFinal ? "Генеральная репетиция" : "Тренировочный тур"}</h1>
       <p className="lead">
         Шесть знакомых задач A–F. Проверь, что можешь решить самостоятельно.
       </p>
@@ -219,10 +233,12 @@ export default function MockContest() {
             время тура не подглядывай в уроки.
           </p>
           <p>
-            В шаблонах оставлены ввод и справочные данные. Это учебная репетиция
-            по пройденным задачам, не официальный тур. Зачёт — число задач,
-            прошедших все учебные проверки, без частичных баллов. Прогресс
-            уроков учитывается отдельно.
+            {isFinal
+              ? "Редакторы пустые: ввод и решение напиши самостоятельно. Рисунки, схема клавиатуры и справочник слов доступны в условиях. Первый тур сохраняется отдельно. "
+              : "В шаблонах оставлены ввод и справочные данные. "}
+            Это учебная репетиция по пройденным задачам, не официальный тур.
+            Зачёт — число задач, прошедших все учебные проверки, без частичных
+            баллов. Прогресс уроков учитывается отдельно.
           </p>
           <button className="button primary" onClick={begin}>
             Начать тур · 180 минут
@@ -339,6 +355,7 @@ export default function MockContest() {
                 </div>
               </details>
             )}
+            {isFinal && task.letter === "A" && <KeyboardPaths />}
             {task.lesson.referenceTable && (
               <details className="word-reference">
                 <summary>Английские названия из условия</summary>
@@ -414,6 +431,72 @@ export default function MockContest() {
           {finished && (
             <section className="contest-review">
               <h2>Разбор после тура</h2>
+              <div className="review-journal">
+                <h3>Мой разбор задачи {task.letter}</h3>
+                <label>
+                  Причина затруднения
+                  <select
+                    aria-label="Причина затруднения"
+                    value={attempt.review?.[exercise.id]?.cause ?? ""}
+                    onChange={(event) => {
+                      const cause = event.target.value;
+                      setAttempt((old) =>
+                        old
+                          ? {
+                              ...old,
+                              review: {
+                                ...old.review,
+                                [exercise.id]: {
+                                  cause,
+                                  plan: old.review?.[exercise.id]?.plan ?? "",
+                                },
+                              },
+                            }
+                          : old,
+                      );
+                    }}
+                  >
+                    <option value="" disabled>
+                      Выбери причину
+                    </option>
+                    {reviewCauses.map((cause) => (
+                      <option key={cause}>{cause}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Что повторить и как проверить
+                  <textarea
+                    aria-label="Что повторить и как проверить"
+                    maxLength={2000}
+                    value={attempt.review?.[exercise.id]?.plan ?? ""}
+                    disabled={!attempt.review?.[exercise.id]?.cause}
+                    placeholder="Например: разобрать нулевые количества и проверить перестановки цветов."
+                    onChange={(event) => {
+                      const plan = event.target.value;
+                      setAttempt((old) =>
+                        old && old.review?.[exercise.id]
+                          ? {
+                              ...old,
+                              review: {
+                                ...old.review,
+                                [exercise.id]: {
+                                  ...old.review[exercise.id],
+                                  plan,
+                                },
+                              },
+                            }
+                          : old,
+                      );
+                    }}
+                  />
+                </label>
+                <p className="small">
+                  Сначала выбери причину. Заметка сохраняется в этом браузере
+                  вместе с попыткой и включается в «Скачать результат тура». Это
+                  твой план повторения, а не дополнительная отметка.
+                </p>
+              </div>
               <p>{exercise.explanation}</p>
               <details>
                 <summary>Подсказки по шагам</summary>

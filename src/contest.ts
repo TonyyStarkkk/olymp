@@ -1,6 +1,10 @@
 import { lessons } from "./course.ts";
 
 export const CONTEST_KEY = "olymp-contest-v1";
+export const FINAL_CONTEST_KEY = "olymp-final-contest-v1";
+export type ContestKind = "practice" | "final";
+export const getContestKey = (kind: ContestKind) =>
+  kind === "final" ? FINAL_CONTEST_KEY : CONTEST_KEY;
 export const CONTEST_DURATION = 180 * 60 * 1000;
 export const contestTasks = [
   "passwords",
@@ -25,6 +29,26 @@ export const contestTasks = [
     },
   };
 });
+export const finalContestTasks = contestTasks.map((task) => ({
+  ...task,
+  exercise: {
+    ...task.exercise,
+    starter: "",
+    prompt: task.exercise.prompt.replace(
+      "Все буквенные ряды и диагонали длины хотя бы 2 даны в шаблоне.",
+      "Буквенная клавиатура и примеры направлений показаны на схеме ниже.",
+    ),
+  },
+}));
+export const getContestTasks = (kind: ContestKind) =>
+  kind === "final" ? finalContestTasks : contestTasks;
+export const reviewCauses = [
+  "Без затруднений",
+  "Не понял условие",
+  "Не нашёл алгоритм",
+  "Ошибка в коде",
+  "Не хватило времени",
+];
 export type ContestAttempt = {
   version: 1;
   startedAt: number;
@@ -33,6 +57,7 @@ export type ContestAttempt = {
   drafts: Record<string, string>;
   inputs: Record<string, string>;
   accepted: Record<string, { code: string; at: number }>;
+  review?: Record<string, { cause: string; plan: string }>;
 };
 export function newAttempt(now = Date.now()): ContestAttempt {
   return {
@@ -94,6 +119,19 @@ export function readAttempt(
       data.accepted[id] = {
         code: accepted.code.slice(0, 100000),
         at: accepted.at,
+      };
+    }
+    const review = parsed.review?.[id];
+    if (
+      data.finishedAt !== null &&
+      review &&
+      reviewCauses.includes(review.cause) &&
+      typeof review.plan === "string"
+    ) {
+      data.review ??= {};
+      data.review[id] = {
+        cause: review.cause,
+        plan: review.plan.slice(0, 2000),
       };
     }
   }
