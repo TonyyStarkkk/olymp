@@ -1,3 +1,4 @@
+import type { ContestTask } from "./assessments";
 import { lessons } from "./course.ts";
 
 export const CONTEST_KEY = "olymp-contest-v1";
@@ -57,6 +58,7 @@ export type ContestAttempt = {
   drafts: Record<string, string>;
   inputs: Record<string, string>;
   accepted: Record<string, { code: string; at: number }>;
+  reviewed?: boolean;
   review?: Record<string, { cause: string; plan: string }>;
 };
 export function newAttempt(now = Date.now()): ContestAttempt {
@@ -73,6 +75,8 @@ export function newAttempt(now = Date.now()): ContestAttempt {
 export function readAttempt(
   raw: string | null,
   now = Date.now(),
+  tasks: ContestTask[] = contestTasks,
+  duration = CONTEST_DURATION,
 ): ContestAttempt | null {
   if (!raw) return null;
   const parsed = JSON.parse(raw);
@@ -85,7 +89,8 @@ export function readAttempt(
   )
     throw new Error("Invalid contest start");
   const data = newAttempt(parsed.startedAt);
-  const deadline = data.startedAt + CONTEST_DURATION;
+  const deadline = data.startedAt + duration;
+  if (parsed.reviewed === true) data.reviewed = true;
   if (
     parsed.finishedAt !== null &&
     (!Number.isSafeInteger(parsed.finishedAt) ||
@@ -97,12 +102,12 @@ export function readAttempt(
   data.selected =
     Number.isInteger(parsed.selected) &&
     parsed.selected >= 0 &&
-    parsed.selected < contestTasks.length
+    parsed.selected < tasks.length
       ? parsed.selected
       : 0;
   for (const {
     exercise: { id },
-  } of contestTasks) {
+  } of tasks) {
     for (const field of ["drafts", "inputs"] as const) {
       if (typeof parsed[field]?.[id] === "string")
         data[field][id] = parsed[field][id].slice(0, 100000);

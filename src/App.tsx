@@ -1,3 +1,7 @@
+import Assessments from "./Assessments";
+import MicroPractice from "./MicroPractice";
+import { assessments } from "./assessments";
+import { microExercises } from "./micro-exercises";
 import KeyboardPaths from "./KeyboardPaths";
 import CubeExplorer from "./CubeExplorer";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
@@ -44,7 +48,15 @@ import type { RunResult } from "./usePython";
 
 type SetProgress = Dispatch<SetStateAction<Progress>>;
 type View = {
-  kind: "home" | "progress" | "guide" | "week" | "lesson" | "contest";
+  kind:
+    | "home"
+    | "progress"
+    | "guide"
+    | "week"
+    | "lesson"
+    | "contest"
+    | "assessments"
+    | "assessment";
   id?: string;
 };
 function getView(): View {
@@ -53,6 +65,12 @@ function getView(): View {
     return { kind: "lesson", id: parts[1] };
   if (parts[0] === "week" && /^[1-8]$/.test(parts[1]))
     return { kind: "week", id: parts[1] };
+  if (parts[0] === "assessments") return { kind: "assessments" };
+  if (
+    parts[0] === "assessment" &&
+    assessments.some((item) => item.id === parts[1])
+  )
+    return { kind: "assessment", id: parts[1] };
   if (parts[0] === "contest")
     return { kind: "contest", id: parts[1] === "final" ? "final" : "practice" };
   if (parts[0] === "progress" || parts[0] === "guide")
@@ -177,6 +195,15 @@ export default function App() {
             <Flag size={19} />
             Генеральная репетиция
           </a>
+          <a
+            href="#/assessments"
+            className={
+              ["assessments", "assessment"].includes(view.kind) ? "active" : ""
+            }
+          >
+            <CheckCheck size={19} />
+            Самостоятельные работы
+          </a>
         </nav>
         <div className="sidebar-divider" />
         <div className="sidebar-caption">
@@ -254,17 +281,19 @@ export default function App() {
             <span className="breadcrumb">Моё обучение</span>
             <ChevronRight size={14} />
             <strong>
-              {view.kind === "contest"
-                ? view.id === "final"
-                  ? "Генеральная репетиция"
-                  : "Тренировочный тур"
-                : view.kind === "progress"
-                  ? "Мой прогресс"
-                  : view.kind === "guide"
-                    ? "Памятка Python"
-                    : currentLesson
-                      ? currentLesson.title
-                      : "Python с нуля"}
+              {["assessments", "assessment"].includes(view.kind)
+                ? "Самостоятельные работы"
+                : view.kind === "contest"
+                  ? view.id === "final"
+                    ? "Генеральная репетиция"
+                    : "Тренировочный тур"
+                  : view.kind === "progress"
+                    ? "Мой прогресс"
+                    : view.kind === "guide"
+                      ? "Памятка Python"
+                      : currentLesson
+                        ? currentLesson.title
+                        : "Python с нуля"}
             </strong>
           </div>
           <div className="topbar-right">
@@ -307,6 +336,15 @@ export default function App() {
             />
           )}
           {view.kind === "guide" && <Guide />}
+          {view.kind === "assessments" && <Assessments />}
+          {view.kind === "assessment" && (
+            <Suspense fallback={<p className="page">Загрузка работы…</p>}>
+              <MockContest
+                key={view.id}
+                assessment={assessments.find((item) => item.id === view.id)}
+              />
+            </Suspense>
+          )}
           {view.kind === "contest" && (
             <Suspense fallback={<p className="page">Загрузка тура…</p>}>
               <MockContest
@@ -637,6 +675,16 @@ function WeekOverview({
           </a>
         </div>
       )}
+      <section className="contest-intro">
+        <h2>Проверь себя на новых задачах</h2>
+        <p>
+          После уроков недели реши две новые задачи за 30 минут. Пустой
+          редактор, разбор после завершения, отдельный результат.
+        </p>
+        <a className="button primary" href={`#/assessment/week-${week}`}>
+          Самостоятельная работа недели
+        </a>
+      </section>
       {week === 7 && (
         <section className="contest-intro">
           <h2>Первая репетиция</h2>
@@ -661,6 +709,9 @@ function WeekOverview({
           </a>
           <a className="back-link" href="#/contest">
             Вернуться к разбору первого тура
+          </a>
+          <a className="button secondary" href="#/assessment/new-final">
+            Решить новый итоговый вариант
           </a>
         </section>
       )}
@@ -808,6 +859,15 @@ function LessonView({
                     {section.caption && (
                       <p className="code-caption">{section.caption}</p>
                     )}
+                    {microExercises
+                      .filter(
+                        (task) =>
+                          task.lessonId === lesson.id &&
+                          task.afterSection === i,
+                      )
+                      .map((task) => (
+                        <MicroPractice key={task.id} task={task} />
+                      ))}
                   </article>
                 ))}
                 {lesson.referencePatterns && (
@@ -953,6 +1013,21 @@ function LessonView({
           </div>
         </div>
       </div>
+      {getWeekLessons(lesson.week).at(-1)?.id === lesson.id && (
+        <section className="contest-intro">
+          <h2>Теперь попробуй новое условие</h2>
+          <p>
+            После задач урока проверь, получится ли выбрать способ решения
+            самостоятельно.
+          </p>
+          <a
+            className="button secondary"
+            href={`#/assessment/week-${lesson.week}`}
+          >
+            Самостоятельная работа · неделя {lesson.week}
+          </a>
+        </section>
+      )}
       <div className={`lesson-finish ${completed ? "finished" : ""}`}>
         <div>
           <strong>
@@ -1601,6 +1676,16 @@ function ProgressView({
           );
         })}
       </div>
+      <section className="contest-intro">
+        <h2>Понимание и самостоятельность</h2>
+        <p>
+          Короткие упражнения внутри уроков и новые самостоятельные работы
+          сохраняются отдельно. Их результаты не меняют прежние отметки за курс.
+        </p>
+        <a className="button secondary" href="#/assessments">
+          Посмотреть самостоятельные работы
+        </a>
+      </section>
       <h2 className="list-heading">Твои задания</h2>
       <div className="results-list">
         {lessons.map((lesson) => (

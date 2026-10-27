@@ -3646,3 +3646,112 @@ button {
 .contest-intro > .back-link {
   margin-top: 18px;
 }
+
+/* Small learning steps and independent assessments use the same quiet palette. */
+.micro-practice {
+  margin: 24px 0 8px;
+  padding: 20px;
+  border: 1px solid #bdbdbd;
+  border-radius: 10px;
+  background: #fafafa;
+  color: #111;
+}
+.micro-practice h3 {
+  margin: 10px 0;
+  font-size: 18px;
+}
+.micro-practice p {
+  line-height: 1.65;
+}
+.micro-fields {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+}
+.micro-fields label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(70px, 120px);
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+}
+.micro-fields input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #777;
+  border-radius: 5px;
+  color: #111;
+  background: #fff;
+  font: inherit;
+}
+.micro-fields input[aria-invalid="true"] {
+  border: 2px solid #333;
+}
+.micro-fields small {
+  grid-column: 1 / -1;
+}
+.micro-feedback {
+  border-left: 3px solid #555;
+  margin-top: 16px;
+  padding: 10px 14px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.micro-order {
+  padding-left: 24px;
+}
+.micro-order li {
+  padding: 10px 0;
+  line-height: 1.5;
+}
+.micro-order li > div {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.micro-order .button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+}
+.assessment-list {
+  display: grid;
+  gap: 20px;
+}
+.assessment-card {
+  padding: 24px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  background: #fff;
+}
+.assessment-card h2 {
+  font-size: 21px;
+}
+.assessment-card p,
+.assessment-note {
+  line-height: 1.65;
+}
+.assessment-card .back-link {
+  display: block;
+  margin-top: 16px;
+}
+.assessment-note {
+  padding: 16px;
+  border: 1px solid #aaa;
+  background: #f5f5f5;
+}
+@media (max-width: 600px) {
+  .micro-practice {
+    padding: 14px;
+  }
+  .micro-fields label {
+    grid-template-columns: 1fr;
+  }
+  .micro-fields input {
+    max-width: 100%;
+  }
+  .assessment-card {
+    padding: 18px;
+  }
+}

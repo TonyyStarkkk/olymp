@@ -8,14 +8,25 @@ import {
   readAttempt,
 } from "./contest";
 import type { ContestKind } from "./contest";
+import { assessmentKey, assessmentTasks } from "./assessments";
+import type { Assessment, ContestTask } from "./assessments";
 import KeyboardPaths from "./KeyboardPaths";
 import { explainError, normalizeOutput, usePython } from "./usePython";
 
 const CodeEditor = lazy(() => import("./CodeEditor"));
-function loadAttempt(storageKey: string) {
+function loadAttempt(
+  storageKey: string,
+  tasks: ContestTask[],
+  duration: number,
+) {
   try {
     return {
-      data: readAttempt(localStorage.getItem(storageKey)),
+      data: readAttempt(
+        localStorage.getItem(storageKey),
+        Date.now(),
+        tasks,
+        duration,
+      ),
       warning: "",
     };
   } catch {
@@ -28,13 +39,26 @@ function loadAttempt(storageKey: string) {
 }
 export default function MockContest({
   kind = "practice",
+  assessment,
 }: {
   kind?: ContestKind;
+  assessment?: Assessment;
 }) {
-  const storageKey = getContestKey(kind);
-  const contestTasks = getContestTasks(kind);
+  const storageKey = assessment
+    ? assessmentKey(assessment.id)
+    : getContestKey(kind);
+  const duration = assessment ? assessment.minutes * 60000 : CONTEST_DURATION;
+  const minutes = duration / 60000;
+  const title =
+    assessment?.title ??
+    (kind === "final" ? "Генеральная репетиция" : "Тренировочный тур");
+  const contestTasks = assessment
+    ? assessmentTasks(assessment)
+    : getContestTasks(kind);
   const isFinal = kind === "final";
-  const [loaded] = useState(() => loadAttempt(storageKey));
+  const [loaded] = useState(() =>
+    loadAttempt(storageKey, contestTasks, duration),
+  );
   const [attempt, setAttempt] = useState(loaded.data);
   const [warning, setWarning] = useState(loaded.warning);
   const [now, setNow] = useState(Date.now());
@@ -45,7 +69,7 @@ export default function MockContest({
   const mounted = useRef(true);
   const current = useRef(attempt);
   current.current = attempt;
-  const deadline = attempt ? attempt.startedAt + CONTEST_DURATION : 0;
+  const deadline = attempt ? attempt.startedAt + duration : 0;
   const finished = Boolean(
     attempt && (attempt.finishedAt !== null || now >= deadline),
   );
@@ -91,6 +115,12 @@ export default function MockContest({
   const begin = () => {
     stop();
     const started = newAttempt();
+    if (
+      assessment &&
+      (attempt?.reviewed ||
+        (attempt?.finishedAt !== null && attempt?.finishedAt !== undefined))
+    )
+      started.reviewed = true;
     setNow(started.startedAt);
     setAttempt(started);
     setFeedback("");
@@ -103,7 +133,7 @@ export default function MockContest({
       old
         ? {
             ...old,
-            finishedAt: Math.min(Date.now(), old.startedAt + CONTEST_DURATION),
+            finishedAt: Math.min(Date.now(), old.startedAt + duration),
           }
         : old,
     );
@@ -125,9 +155,11 @@ export default function MockContest({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = isFinal
-      ? "olymp-final-tour.json"
-      : "olymp-training-tour.json";
+    link.download = assessment
+      ? `olymp-${assessment.id}.json`
+      : isFinal
+        ? "olymp-final-tour.json"
+        : "olymp-training-tour.json";
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -177,7 +209,7 @@ export default function MockContest({
     } else if (failure === -1 && results.length === exercise.tests.length) {
       const at = Date.now();
       setAttempt((old) =>
-        old && old.finishedAt === null && at < old.startedAt + CONTEST_DURATION
+        old && old.finishedAt === null && at < old.startedAt + duration
           ? {
               ...old,
               accepted: {
@@ -209,16 +241,38 @@ export default function MockContest({
     .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
   return (
     <div className="page contest-page">
-      <a className="back-link" href={isFinal ? "#/week/8" : "#/week/7"}>
-        {isFinal ? "← К восьмой неделе" : "← К седьмой неделе"}
+      <a
+        className="back-link"
+        href={assessment ? "#/assessments" : isFinal ? "#/week/8" : "#/week/7"}
+      >
+        {assessment
+          ? "← К самостоятельным работам"
+          : isFinal
+            ? "← К восьмой неделе"
+            : "← К седьмой неделе"}
       </a>
       <div className="eyebrow">
-        {isFinal ? "ФИНАЛЬНАЯ" : "ПЕРВАЯ"} РЕПЕТИЦИЯ · 180 МИНУТ
+        {assessment
+          ? "САМОСТОЯТЕЛЬНАЯ РАБОТА"
+          : isFinal
+            ? "ФИНАЛЬНАЯ РЕПЕТИЦИЯ"
+            : "ПЕРВАЯ РЕПЕТИЦИЯ"}{" "}
+        · {minutes} МИНУТ
       </div>
-      <h1>{isFinal ? "Генеральная репетиция" : "Тренировочный тур"}</h1>
+      <h1>{title}</h1>
       <p className="lead">
-        Шесть знакомых задач A–F. Проверь, что можешь решить самостоятельно.
+        {assessment
+          ? attempt?.reviewed
+            ? "Повторение варианта после разбора. Попробуй восстановить решения самостоятельно."
+            : `${contestTasks.length === 2 ? "Две новые задачи" : "Шесть новых задач"} на изученные приёмы. Выбери способ решения самостоятельно.`
+          : "Шесть знакомых задач A–F. Проверь, что можешь решить самостоятельно."}
       </p>
+      {assessment && attempt?.reviewed && (
+        <p className="assessment-note">
+          Повторная попытка: эти задачи уже открывались для разбора. Результат
+          показывает тренировку на знакомом варианте.
+        </p>
+      )}
       {warning && (
         <p className="storage-warning" role="alert">
           {warning}
@@ -228,20 +282,24 @@ export default function MockContest({
         <section className="contest-intro">
           <h2>Перед стартом</h2>
           <p>
-            Отведи три часа. Таймер продолжит идти, если уйти со страницы или
-            закрыть браузер. Подсказки и разборы откроются после завершения; во
-            время тура не подглядывай в уроки.
+            Отведи {minutes} минут. Таймер продолжит идти, если уйти со страницы
+            или закрыть браузер. Подсказки и разборы откроются после завершения;
+            во время тура не подглядывай в уроки.
           </p>
           <p>
-            {isFinal
-              ? "Редакторы пустые: ввод и решение напиши самостоятельно. Рисунки, схема клавиатуры и справочник слов доступны в условиях. Первый тур сохраняется отдельно. "
-              : "В шаблонах оставлены ввод и справочные данные. "}
-            Это учебная репетиция по пройденным задачам, не официальный тур.
+            {assessment
+              ? "Редакторы пустые. Условия не называют способ решения. Можно запускать код и проверять его сколько нужно; разборы доступны только после завершения всей работы. Повторная попытка после разбора уже считается тренировкой на знакомых задачах. "
+              : isFinal
+                ? "Редакторы пустые: ввод и решение напиши самостоятельно. Рисунки, схема клавиатуры и справочник слов доступны в условиях. Первый тур сохраняется отдельно. "
+                : "В шаблонах оставлены ввод и справочные данные. "}
+            {assessment
+              ? "Это учебная самопроверка, не официальный вариант олимпиады. "
+              : "Это учебная репетиция по пройденным задачам, не официальный тур. "}
             Зачёт — число задач, прошедших все учебные проверки, без частичных
             баллов. Прогресс уроков учитывается отдельно.
           </p>
           <button className="button primary" onClick={begin}>
-            Начать тур · 180 минут
+            {assessment ? "Начать работу" : "Начать тур"} · {minutes} минут
           </button>
         </section>
       ) : (
@@ -252,18 +310,30 @@ export default function MockContest({
               role="timer"
               aria-label="Осталось времени"
             >
-              {finished ? "Тур завершён" : clock}
+              {finished
+                ? assessment
+                  ? "Работа завершена"
+                  : "Тур завершён"
+                : clock}
             </strong>
-            <span className="contest-score">Зачтено: {score} из 6</span>
+            <span className="contest-score">
+              Зачтено: {score} из {contestTasks.length}
+            </span>
             <button className="button secondary" onClick={download}>
-              Скачать результат тура
+              {assessment
+                ? "Скачать результат работы"
+                : "Скачать результат тура"}
             </button>
             <button
               className="button secondary"
               disabled={busy}
               onClick={() => setConfirm(finished ? "restart" : "finish")}
             >
-              {finished ? "Новая попытка" : "Завершить тур"}
+              {finished
+                ? "Новая попытка"
+                : assessment
+                  ? "Завершить работу"
+                  : "Завершить тур"}
             </button>
           </div>
           {confirm && (
@@ -293,15 +363,18 @@ export default function MockContest({
           )}
           {finished && (
             <section className="contest-summary" aria-label="Итоги тура">
-              <h2>Результат: {score} из 6 задач</h2>
+              <h2>
+                Результат: {score} из {contestTasks.length} задач
+              </h2>
               <p>
                 Сохранены решения, принятые до окончания времени. Выбери задачу
                 ниже, сравни код с разбором и запиши причину затруднения:
                 условие, алгоритм, ошибка в коде или нехватка времени.
               </p>
               <p>
-                Последние черновики доступны для просмотра. Исправлять решения
-                после тура можно в уроках.
+                {assessment
+                  ? "Последние черновики доступны для просмотра. После разбора можно начать новую попытку; она будет тренировкой на знакомых задачах. Перед заменой скачай результат. Ссылка под разбором ведёт к теме для повторения."
+                  : "Последние черновики доступны для просмотра. Исправлять решения после тура можно в уроках."}
               </p>
             </section>
           )}
@@ -355,7 +428,7 @@ export default function MockContest({
                 </div>
               </details>
             )}
-            {isFinal && task.letter === "A" && <KeyboardPaths />}
+            {!assessment && isFinal && task.letter === "A" && <KeyboardPaths />}
             {task.lesson.referenceTable && (
               <details className="word-reference">
                 <summary>Английские названия из условия</summary>
@@ -430,7 +503,9 @@ export default function MockContest({
           </section>
           {finished && (
             <section className="contest-review">
-              <h2>Разбор после тура</h2>
+              <h2>
+                {assessment ? "Разбор после работы" : "Разбор после тура"}
+              </h2>
               <div className="review-journal">
                 <h3>Мой разбор задачи {task.letter}</h3>
                 <label>
@@ -471,7 +546,11 @@ export default function MockContest({
                     maxLength={2000}
                     value={attempt.review?.[exercise.id]?.plan ?? ""}
                     disabled={!attempt.review?.[exercise.id]?.cause}
-                    placeholder="Например: разобрать нулевые количества и проверить перестановки цветов."
+                    placeholder={
+                      assessment
+                        ? "Например: повторить границы цикла и проверить случай без элементов."
+                        : "Например: разобрать нулевые количества и проверить перестановки цветов."
+                    }
                     onChange={(event) => {
                       const plan = event.target.value;
                       setAttempt((old) =>
@@ -493,8 +572,8 @@ export default function MockContest({
                 </label>
                 <p className="small">
                   Сначала выбери причину. Заметка сохраняется в этом браузере
-                  вместе с попыткой и включается в «Скачать результат тура». Это
-                  твой план повторения, а не дополнительная отметка.
+                  вместе с попыткой и включается в скачанный результат. Это твой
+                  план повторения, а не дополнительная отметка.
                 </p>
               </div>
               <p>{exercise.explanation}</p>
