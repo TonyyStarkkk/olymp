@@ -1,3 +1,16 @@
+import StudyPlan, { WeekRhythm } from "./StudyPlan";
+import FontStages, { useFontStages } from "./FontStages";
+import { fontStages } from "./font-stages";
+import {
+  advancedLessonIds,
+  advancedExerciseIds,
+  coreLessons,
+  coreExercises,
+  coreLessonComplete,
+  routeStats,
+  resumeCoreLesson,
+  nextCoreLesson,
+} from "./learning-route";
 import Assessments from "./Assessments";
 import MicroPractice from "./MicroPractice";
 import { assessments } from "./assessments";
@@ -38,7 +51,6 @@ import {
   allExercises,
   getWeekLessons,
   availableWeekNumbers,
-  totalCheckpoints,
 } from "./course";
 import type { Exercise, Lesson } from "./course";
 import { lessonComplete, loadProgress, STORAGE_KEY } from "./storage";
@@ -56,7 +68,8 @@ type View = {
     | "lesson"
     | "contest"
     | "assessments"
-    | "assessment";
+    | "assessment"
+    | "plan";
   id?: string;
 };
 function getView(): View {
@@ -65,6 +78,7 @@ function getView(): View {
     return { kind: "lesson", id: parts[1] };
   if (parts[0] === "week" && /^[1-8]$/.test(parts[1]))
     return { kind: "week", id: parts[1] };
+  if (parts[0] === "plan") return { kind: "plan" };
   if (parts[0] === "assessments") return { kind: "assessments" };
   if (
     parts[0] === "assessment" &&
@@ -117,24 +131,14 @@ export default function App() {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(""), 4500);
   };
-  const solvedCount = Object.keys(progress.solved).length;
   const currentLesson = lessons.find((x) => x.id === view.id);
-  const lastLesson =
-    lessons.find((x) =>
-      x.exercises.some((task) => task.id === progress.lastExercise),
-    ) ?? lessons[0];
-  const resumeLesson = lessonComplete(progress, lastLesson.id)
-    ? (lessons.find((lesson) => !lessonComplete(progress, lesson.id)) ??
-      lastLesson)
-    : lastLesson;
+  const resumeLesson = resumeCoreLesson(progress);
+  const coreStats = routeStats(progress);
   const activeWeek =
     view.kind === "week"
       ? Number(view.id)
       : (currentLesson?.week ?? resumeLesson.week);
-  const percent = Math.round(
-    ((solvedCount + Object.keys(progress.quizzes).length) / totalCheckpoints) *
-      100,
-  );
+  const percent = coreStats.percent;
 
   return (
     <div className="app-shell">
@@ -204,6 +208,10 @@ export default function App() {
             <CheckCheck size={19} />
             Самостоятельные работы
           </a>
+          <a href="#/plan" className={view.kind === "plan" ? "active" : ""}>
+            <BookOpen size={19} />
+            Маршрут и ритм
+          </a>
         </nav>
         <div className="sidebar-divider" />
         <div className="sidebar-caption">
@@ -226,9 +234,9 @@ export default function App() {
                 className={`week-number ${getWeekLessons(index + 1).length ? "available" : ""}`}
               >
                 {getWeekLessons(index + 1).length > 0 &&
-                getWeekLessons(index + 1).every((lesson) =>
-                  lessonComplete(progress, lesson.id),
-                ) ? (
+                coreLessons
+                  .filter((lesson) => lesson.week === index + 1)
+                  .every((lesson) => coreLessonComplete(progress, lesson)) ? (
                   <Check size={14} />
                 ) : (
                   String(index + 1).padStart(2, "0")
@@ -250,14 +258,15 @@ export default function App() {
         </nav>
         <div className="sidebar-bottom">
           <div className="side-progress-heading">
-            <span>Доступные уроки</span>
+            <span>Основной маршрут</span>
             <strong>{percent}%</strong>
           </div>
           <div className="progress-track">
             <span style={{ width: `${percent}%` }} />
           </div>
           <p>
-            {solvedCount} из {allExercises.length} задач решено
+            {coreStats.solved} из {coreExercises.length} задач основного
+            маршрута
           </p>
           <div className="student-tag">
             <span className="student-avatar">Я</span>
@@ -281,19 +290,21 @@ export default function App() {
             <span className="breadcrumb">Моё обучение</span>
             <ChevronRight size={14} />
             <strong>
-              {["assessments", "assessment"].includes(view.kind)
-                ? "Самостоятельные работы"
-                : view.kind === "contest"
-                  ? view.id === "final"
-                    ? "Генеральная репетиция"
-                    : "Тренировочный тур"
-                  : view.kind === "progress"
-                    ? "Мой прогресс"
-                    : view.kind === "guide"
-                      ? "Памятка Python"
-                      : currentLesson
-                        ? currentLesson.title
-                        : "Python с нуля"}
+              {view.kind === "plan"
+                ? "Маршрут и ритм"
+                : ["assessments", "assessment"].includes(view.kind)
+                  ? "Самостоятельные работы"
+                  : view.kind === "contest"
+                    ? view.id === "final"
+                      ? "Генеральная репетиция"
+                      : "Тренировочный тур"
+                    : view.kind === "progress"
+                      ? "Мой прогресс"
+                      : view.kind === "guide"
+                        ? "Памятка Python"
+                        : currentLesson
+                          ? currentLesson.title
+                          : "Python с нуля"}
             </strong>
           </div>
           <div className="topbar-right">
@@ -335,6 +346,7 @@ export default function App() {
               notify={notify}
             />
           )}
+          {view.kind === "plan" && <StudyPlan progress={progress} />}
           {view.kind === "guide" && <Guide />}
           {view.kind === "assessments" && <Assessments />}
           {view.kind === "assessment" && (
@@ -379,6 +391,7 @@ function Home({
   progress: Progress;
   resumeLesson: Lesson;
 }) {
+  const coreFinished = routeStats(progress).complete;
   const started =
     Object.keys(progress.drafts).length > 0 ||
     Object.keys(progress.solved).length > 0;
@@ -417,15 +430,23 @@ function Home({
           </p>
           <a
             className="button primary hero-cta"
-            href={`#/lesson/${resumeLesson.id}`}
+            href={
+              coreFinished
+                ? "#/assessment/new-final"
+                : `#/lesson/${resumeLesson.id}`
+            }
           >
-            {started ? "Продолжить обучение" : "Начать первый урок"}
+            {coreFinished
+              ? "Перейти к итоговой проверке"
+              : started
+                ? "Продолжить обучение"
+                : "Начать первый урок"}
             <ArrowRight size={18} />
           </a>
           <div className="hero-meta">
             <span className="hero-meta-item">
               <Clock3 size={14} />
-              35 минут на первый урок
+              Около 35 минут · можно разделить
             </span>
             <span className="meta-separator">·</span>
             <span className="hero-meta-item">Всё работает в браузере</span>
@@ -492,6 +513,16 @@ function Home({
           </div>
         </div>
       </div>
+      <section className="route-note">
+        <h2>Сначала основной маршрут</h2>
+        <p>
+          Задача F и подготовка к ней — повышенная сложность. Их можно отложить,
+          продолжая курс. Время уроков — ориентир, а не ограничение.
+        </p>
+        <a className="button secondary" href="#/plan">
+          Посмотреть маршрут и недельный ритм
+        </a>
+      </section>
       <div className="dashboard-columns">
         <section>
           {availableWeekNumbers.map((week) => (
@@ -506,19 +537,22 @@ function Home({
                 <span className="muted small">
                   {
                     getWeekLessons(week).filter((lesson) =>
-                      lessonComplete(progress, lesson.id),
+                      coreLessonComplete(progress, lesson),
                     ).length
                   }{" "}
-                  / {getWeekLessons(week).length} пройдено
+                  /{" "}
+                  {
+                    getWeekLessons(week).filter(
+                      (lesson) => !advancedLessonIds.has(lesson.id),
+                    ).length
+                  }{" "}
+                  основных занятий
                 </span>
               </div>
               <LessonList progress={progress} week={week} />
             </section>
           ))}
-          <a
-            href={`#/week/${availableWeekNumbers.length + 1}`}
-            className="next-week-link"
-          >
+          <a href="#/plan" className="next-week-link">
             А что дальше? Посмотреть маршрут
             <ArrowRight size={16} />
           </a>
@@ -602,6 +636,17 @@ function LessonList({ progress, week }: { progress: Progress; week: number }) {
                 {lesson.id === "hello" && !complete && (
                   <span className="mini-tag">Начни здесь</span>
                 )}
+                {coreLessonComplete(progress, lesson) && !complete && (
+                  <span className="mini-tag">Основная часть пройдена</span>
+                )}
+                {advancedLessonIds.has(lesson.id) && (
+                  <span className="mini-tag">
+                    Повышенная сложность · по желанию
+                  </span>
+                )}
+                {lesson.id === "review-olympiad" && (
+                  <span className="mini-tag">Задание 3 — дополнительное</span>
+                )}
                 {index === 4 && (
                   <span className="mini-tag checkpoint-tag">Практика</span>
                 )}
@@ -610,9 +655,15 @@ function LessonList({ progress, week }: { progress: Progress; week: number }) {
               <div className="lesson-meta">
                 <span>
                   <Clock3 size={12} />
-                  {lesson.duration} мин
+                  Ориентир: {lesson.duration} мин
                 </span>
-                <span>3 задания</span>
+                <span>
+                  {lesson.id === "font"
+                    ? "D: 5 этапов, можно сделать перерыв"
+                    : lesson.id === "viral"
+                      ? "Можно разделить на 2–3 подхода"
+                      : "3 задания"}
+                </span>
                 {count > 0 && (
                   <span className="green-text">{count}/3 решено</span>
                 )}
@@ -658,6 +709,7 @@ function WeekOverview({
           <p>{data.result}</p>
         </div>
       </div>
+      <WeekRhythm week={week} />
       {getWeekLessons(week).length > 0 ? (
         <LessonList progress={progress} week={week} />
       ) : (
@@ -689,8 +741,8 @@ function WeekOverview({
         <section className="contest-intro">
           <h2>Первая репетиция</h2>
           <p>
-            Шесть задач A–F, 180 минут и отдельные результаты. Начни после
-            уроков этой недели.
+            Задачи A–E и дополнительная F, 180 минут и отдельные результаты.
+            Начни после основных уроков этой недели; полную F можно отложить.
           </p>
           <a className="button primary" href="#/contest">
             Открыть тренировочный тур
@@ -756,7 +808,8 @@ function LessonView({
   );
   const exercise = lesson.exercises[exerciseIndex];
   const completed = lessonComplete(progress, lesson.id);
-  const index = lessons.findIndex((x) => x.id === lesson.id);
+  const nextLesson = nextCoreLesson(lesson);
+  const coreDone = coreLessonComplete(progress, lesson);
   useEffect(() => {
     setProgress((old) =>
       old.lastExercise === exercise.id
@@ -792,9 +845,41 @@ function LessonView({
         </div>
         <span className={`outline-badge ${completed ? "success-badge" : ""}`}>
           {completed ? <CheckCheck size={16} /> : <Clock3 size={16} />}
-          {completed ? "Занятие пройдено" : `${lesson.duration} минут`}
+          {completed
+            ? "Занятие пройдено"
+            : `Ориентир: ${lesson.duration} минут`}
         </span>
       </div>
+      <section className="route-note lesson-route-note">
+        <strong>
+          {advancedLessonIds.has(lesson.id)
+            ? "Повышенная сложность · по желанию"
+            : "Основной маршрут"}
+        </strong>
+        <p>
+          {advancedLessonIds.has(lesson.id)
+            ? "Эту тему можно отложить. Она не уменьшает процент завершения основного маршрута. Начни с коротких шагов в объяснениях; полный алгоритм можно собирать в несколько подходов."
+            : lesson.id === "font"
+              ? "Полную D собирай по этапам: две новые цифры, проверка, затем перерыв. Код и пройденные этапы сохраняются. Не обязательно закончить все рисунки сегодня."
+              : lesson.id === "review-olympiad"
+                ? "Для основной части достаточно вопроса и первых двух задач. Задание 3 повторяет сложную F и остаётся дополнительным."
+                : "Время в заголовке — примерная оценка. Можно разделить занятие на короткие блоки и вернуться к сохранённому коду."}
+        </p>
+        {advancedLessonIds.has(lesson.id) ? (
+          <a className="button secondary" href="#/lesson/tour-plan">
+            Продолжить основной маршрут
+          </a>
+        ) : (
+          <a href="#/plan">Как распределить нагрузку →</a>
+        )}
+      </section>
+      {lesson.id === "prefixes" && (
+        <p className="route-note">
+          После коротких шагов и задач про префиксы можно{" "}
+          <a href="#/lesson/viral">перейти к полной F</a>. Это продолжение
+          повышенного уровня, а не обязательный следующий урок.
+        </p>
+      )}
       <div className="learning-layout">
         <section className="lesson-content">
           <div className="tabs" role="tablist" aria-label="Материал урока">
@@ -1028,15 +1113,35 @@ function LessonView({
           </a>
         </section>
       )}
+      {lesson.id === "next-small" && (
+        <section className="route-note">
+          <h2>Дальше — подготовка к туру</h2>
+          <p>
+            Полную F можно изучить отдельно, когда уверенно получаются строки,
+            множества и вложенные циклы.
+          </p>
+          <a href="#/lesson/prefixes">
+            Хочу попробовать повышенную сложность: подготовка к F →
+          </a>
+        </section>
+      )}
       <div className={`lesson-finish ${completed ? "finished" : ""}`}>
         <div>
           <strong>
-            {completed ? "Ещё один шаг к вершине!" : "Чтобы завершить занятие"}
+            {completed
+              ? "Ещё один шаг к вершине!"
+              : coreDone
+                ? "Основная часть пройдена"
+                : "Чтобы завершить занятие"}
           </strong>
           <p>
             {completed
               ? "Ты ответил на вопрос и решил все три задания. Можно двигаться дальше."
-              : "Ответь на вопрос во вкладке «Разобраться» и пройди проверку трёх заданий."}
+              : coreDone
+                ? "Основная часть занятия пройдена. Дополнительное задание можно оставить на потом."
+                : lesson.id === "review-olympiad"
+                  ? "Ответь на вопрос и реши первые две задачи. Третья — повышенная сложность."
+                  : "Ответь на вопрос во вкладке «Разобраться» и пройди проверку трёх заданий."}
           </p>
         </div>
         {lesson.id === "ready" ? (
@@ -1049,11 +1154,8 @@ function LessonView({
             Перейти к тренировочному туру
             <Trophy size={17} />
           </a>
-        ) : index < lessons.length - 1 ? (
-          <a
-            className="button secondary"
-            href={`#/lesson/${lessons[index + 1].id}`}
-          >
+        ) : nextLesson ? (
+          <a className="button secondary" href={`#/lesson/${nextLesson.id}`}>
             Следующее занятие
             <ArrowRight size={17} />
           </a>
@@ -1085,6 +1187,12 @@ function ExerciseDescription({
     <div className="exercise-description">
       <span className="eyebrow">ЗАДАНИЕ {index + 1} ИЗ 3</span>
       <h2>{exercise.title}</h2>
+      {advancedExerciseIds.has(exercise.id) && (
+        <p className="route-note">
+          Повышенная сложность. Можно вернуться позже; основной маршрут от этого
+          не станет незавершённым.
+        </p>
+      )}
       <p>{exercise.prompt}</p>
       <h4>Входные данные</h4>
       <p className="muted">{exercise.inputHelp}</p>
@@ -1172,6 +1280,8 @@ type Feedback = {
   results: RunResult[];
   passed?: boolean;
   failedIndex?: number;
+  tests?: Exercise["tests"];
+  fontStage?: number;
 };
 function Workspace({
   exercise,
@@ -1199,6 +1309,7 @@ function Workspace({
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [changed, setChanged] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
+  const font = useFontStages(exercise.id === "font-3");
   const { execute, stop, status, version } = usePython();
   const busy = status !== "idle";
   const mounted = useRef(true);
@@ -1217,7 +1328,13 @@ function Workspace({
       drafts: { ...old.drafts, [exercise.id]: value },
     }));
   };
-  const run = async (mode: "run" | "check") => {
+  const run = async (mode: "run" | "check", fontStage?: number) => {
+    const tests =
+      fontStage === undefined
+        ? exercise.tests
+        : exercise.tests.filter((test) =>
+            fontStages[fontStage].digits.includes(test.input),
+          );
     if (code.length > 100000) {
       notify(
         "Для этого задания достаточно небольшого кода. Лимит — 100 000 символов.",
@@ -1241,26 +1358,27 @@ function Workspace({
     setFeedback(null);
     const results = await execute({
       code,
-      inputs:
-        mode === "run" ? [input] : exercise.tests.map((test) => test.input),
+      inputs: mode === "run" ? [input] : tests.map((test) => test.input),
     });
     if (!mounted.current) return;
     if (mode === "check") {
       const failedIndex = results.findIndex(
         (result, i) =>
           result.error ||
-          normalizeOutput(result.output) !==
-            normalizeOutput(exercise.tests[i].expected),
+          normalizeOutput(result.output) !== normalizeOutput(tests[i].expected),
       );
-      const passed =
-        failedIndex === -1 && results.length === exercise.tests.length;
+      const passed = failedIndex === -1 && results.length === tests.length;
       setFeedback({
         mode,
         results,
         passed,
         failedIndex: failedIndex < 0 ? 0 : failedIndex,
+        tests,
+        fontStage,
       });
-      if (passed) {
+      if (passed && exercise.id === "font-3")
+        font.accept(fontStage ?? fontStages.length - 1, code);
+      if (passed && tests.length === exercise.tests.length) {
         setProgress((old) => {
           // Keep the first successful attempt's independence; later review does not erase it.
           if (old.solved[exercise.id]) return old;
@@ -1280,6 +1398,10 @@ function Workspace({
       }
     } else setFeedback({ mode, results });
   };
+  const checkedTests = feedback?.tests ?? exercise.tests;
+  const partialStage =
+    feedback?.fontStage !== undefined &&
+    checkedTests.length < exercise.tests.length;
   const failure =
     feedback?.results[
       feedback.mode === "check" ? (feedback.failedIndex ?? 0) : 0
@@ -1323,6 +1445,15 @@ function Workspace({
           <ChevronRight size={14} />
         </button>
       </div>
+      {exercise.id === "font-3" && (
+        <FontStages
+          alreadySolved={Boolean(progress.solved[exercise.id])}
+          {...font}
+          busy={busy}
+          code={code}
+          onCheck={(stage) => void run("check", stage)}
+        />
+      )}
       <div className="editor-file">
         <span>
           <Code2 size={13} />
@@ -1452,13 +1583,17 @@ function Workspace({
                 </span>
                 <h3>Получилось!</h3>
                 <p>
-                  Все проверки пройдены: {exercise.tests.length} из{" "}
-                  {exercise.tests.length}.
+                  Все проверки пройдены: {checkedTests.length} из{" "}
+                  {checkedTests.length}.
                 </p>
                 <small>
-                  {progress.solved[exercise.id]?.helped
-                    ? "Решено с помощью подсказок. Попробуй следующую задачу самостоятельно."
-                    : "Решено самостоятельно. Ещё один шаг вперёд."}
+                  {partialStage
+                    ? progress.solved[exercise.id]
+                      ? "Этап повторён. Полная D была зачтена ранее; её результат сохраняется."
+                      : "Этап сохранён. Полная D ещё не зачтена: добавляй следующие цифры, когда будешь готов."
+                    : progress.solved[exercise.id]?.helped
+                      ? "Решено с помощью подсказок. Попробуй следующую задачу самостоятельно."
+                      : "Решено самостоятельно. Ещё один шаг вперёд."}
                 </small>
                 {index < exercises.length - 1 && (
                   <button
@@ -1498,14 +1633,14 @@ function Workspace({
                   <div>
                     <span>Вход</span>
                     <pre>
-                      {exercise.tests[feedback.failedIndex ?? 0].input ||
+                      {checkedTests[feedback.failedIndex ?? 0].input ||
                         "Не нужен"}
                     </pre>
                   </div>
                   <div>
                     <span>Ожидается</span>
                     <pre>
-                      {exercise.tests[feedback.failedIndex ?? 0].expected ||
+                      {checkedTests[feedback.failedIndex ?? 0].expected ||
                         "(пустой вывод)"}
                     </pre>
                   </div>
@@ -1549,6 +1684,10 @@ function ProgressView({
   percent: number;
   notify: (message: string) => void;
 }) {
+  const stats = routeStats(progress);
+  const allComplete = lessons.every((lesson) =>
+    lessonComplete(progress, lesson.id),
+  );
   const solved = Object.values(progress.solved);
   const independent = solved.filter((x) => !x.helped).length;
   const exportProgress = () => {
@@ -1591,14 +1730,22 @@ function ProgressView({
         </div>
         <div>
           <h2>
-            {percent === 100
+            {allComplete
               ? "Все уроки курса пройдены!"
-              : solved.length
-                ? "Хорошее начало. Продолжай."
-                : "Первая вершина впереди"}
+              : stats.complete
+                ? "Основной маршрут пройден!"
+                : solved.length
+                  ? "Хорошее начало. Продолжай."
+                  : "Первая вершина впереди"}
           </h2>
           <p>
-            {solved.length} из {allExercises.length} задач ·{" "}
+            Основной маршрут: {stats.solved} из {coreExercises.length} задач,{" "}
+            {stats.quizzes} из {coreLessons.length} вопросов. Повышенная
+            сложность: {stats.advancedSolved} из {advancedExerciseIds.size}{" "}
+            задач.
+          </p>
+          <p>
+            Весь курс: {solved.length} из {allExercises.length} задач ·{" "}
             {Object.keys(progress.quizzes).length} из {lessons.length} вопросов
           </p>
           <p className="small muted">
@@ -1669,6 +1816,21 @@ function ProgressView({
                 {tasks.filter((task) => progress.solved[task.id]).length} из{" "}
                 {tasks.length} задач решено
               </span>
+              <span>
+                Основной маршрут:{" "}
+                {
+                  weekLessons.filter((lesson) =>
+                    coreLessonComplete(progress, lesson),
+                  ).length
+                }{" "}
+                из{" "}
+                {
+                  weekLessons.filter(
+                    (lesson) => !advancedLessonIds.has(lesson.id),
+                  ).length
+                }{" "}
+                занятий
+              </span>
               {completed === weekLessons.length && (
                 <span>Неделя пройдена ✓</span>
               )}
@@ -1697,7 +1859,12 @@ function ProgressView({
             </a>
             {lesson.exercises.map((task) => (
               <div className="result-row" key={task.id}>
-                <span>{task.title}</span>
+                <span>
+                  {task.title}
+                  {advancedExerciseIds.has(task.id)
+                    ? " · повышенная сложность"
+                    : ""}
+                </span>
                 <span
                   className={`result-badge ${progress.solved[task.id] ? (progress.solved[task.id].helped ? "assisted" : "solved") : ""}`}
                 >

@@ -3755,3 +3755,68 @@ button {
     padding: 18px;
   }
 }
+
+.route-note {
+  margin: 24px 0;
+  padding: 22px;
+  background: #fafafa;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  color: #111;
+}
+.route-note h2 {
+  font-size: 21px;
+  margin: 0 0 12px;
+}
+.route-note p,
+.route-note li {
+  line-height: 1.65;
+  margin-bottom: 12px;
+}
+.route-note a {
+  color: #111;
+}
+.lesson-route-note {
+  margin-top: 0;
+}
+.font-stages {
+  padding: 20px;
+  border-top: 1px solid #ccc;
+  background: #fafafa;
+  color: #111;
+}
+.font-stages h3,
+.font-stages h4 {
+  margin: 10px 0;
+}
+.font-stages p {
+  margin: 12px 0;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.font-stages nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+.font-stages nav button {
+  padding: 8px 12px;
+}
+.font-stages nav button[aria-pressed="true"] {
+  background: #333;
+  color: #fff;
+}
+.font-stages details {
+  margin: 14px 0;
+}
+.font-stages pre {
+  max-height: 300px;
+  overflow: auto;
+}
+@media (max-width: 600px) {
+  .route-note,
+  .font-stages {
+    padding: 16px;
+  }
+}

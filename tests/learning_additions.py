@@ -98,7 +98,7 @@ def browser_checks(total):
    card.get_by_role('button',name='Проверить шаг',exact=True).click()
    expect(card.locator('[role="status"]')).to_contain_text('Шаг понятен.')
   page.reload()
-  expect(page.locator('[data-micro-id="reset-trace"] [role="status"]')).to_contain_text('Шаг понятен.')
+  expect(page.locator(f'[data-micro-id="{micros[-1]["id"]}"] [role="status"]')).to_contain_text('Шаг понятен.')
   page.goto(url+'/#/assessments')
   expect(page.locator('.outcome-card')).to_contain_text(f'Выполнено {len(micros)} из {len(micros)}')
   page.screenshot(path=str(artifacts/'assessment-hub-desktop.png'),full_page=True)
